@@ -1,0 +1,47 @@
+package virtuoso.javax;
+import java.util.*;
+public class messages_x extends ListResourceBundle {
+  public messages_x() {
+  }
+  static final Object[][] contents = new String[][]{
+   { "jdbcx.err.1", "Physical Connection is closed"},
+   { "jdbcx.err.2", "Connection is closed"},
+   { "jdbcx.err.3", "Unexpected state of cache... cache_unit hasn't found"},
+   { "jdbcx.err.4", "Connection failed : loginTimeout has expired"},
+   { "jdbcx.err.5", "ConnectionPoolDataSource is closed"},
+   { "jdbcx.err.6", "Statement is closed"},
+   { "jdbcx.err.7", "ResultSet is closed"},
+   { "jdbcx.err.8", "Invalid column count"},
+   { "jdbcx.err.9", "Column Index out of range"},
+   { "jdbcx.err.10", "Unknown type of parameter"},
+   { "jdbcx.err.11", "SQL query is undefined"},
+   { "jdbcx.err.12", "Invalid parameter index {0}"},
+   { "jdbcx.err.13", "Invalid column name: {0}"},
+   { "jdbcx.err.14", " {0} was called when the insert row is off"},
+   { "jdbcx.err.15", "Could not convert parameter to {0}"},
+   { "jdbcx.err.16", "Names of columns are not found"},
+   { "jdbcx.err.17", "Could not set {0} value to field"},
+   { "jdbcx.err.18", "Could not call {0} when the cursor on the insert row."},
+   { "jdbcx.err.19", "Could not call {0} on a TYPE_FORWARD_ONLY result set."},
+   { "jdbcx.err.20", "Could not call {0} on a CONCUR_READ_ONLY result set."},
+   { "jdbcx.err.21", "No row is currently available."},
+   { "jdbcx.err.22", "Invalid hex number"},
+   { "jdbcx.err.23", "The name of table is not defined"},
+   { "jdbcx.err.24", "RowSetWriter is not defined"},
+   { "jdbcx.err.25", "acceptChanges Failed"},
+   { "jdbcx.err.26", "Invalid key columns"},
+   { "jdbcx.err.27", "Illegal operation on non-inserted row"},
+   { "jdbcx.err.28", "Invalid row number for {0}."},
+   { "jdbcx.err.29", "Failed to insert Row"},
+   { "jdbcx.err.30", "Invalid cursor position"},
+   { "jdbcx.err.31", "Unable to get Connection"},
+   { "jdbcx.err.32", "RowSetMetaData is not defined"},
+   { "jdbcx.err.33", "{0} can not determine the table name."},
+   { "jdbcx.err.34", "{0} can not determine the keyCols."},
+   { "jdbcx.err.35", "Method {0} not yet implemented."},
+   { "jdbcx.err.36", "Unable to unwrap to: {0}"},
+   };
+  protected Object[][] getContents() {
+    return contents;
+  }
+}

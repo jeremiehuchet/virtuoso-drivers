@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>unofficial.com.openlink</groupId>
+        <artifactId>virtuoso-parent</artifactId>
+        <version>1</version>
+    </parent>
+    <artifactId>virtuoso-jdbc</artifactId>
+    <packaging>jar</packaging>
+    <name>Virtuoso JDBC 4.2 driver</name>
+    <version>42.3.115</version>
+    <description>JDBC 4.2 driver (JRE 8+) for Virtuoso database</description>
+    <url>https://github.com/openlink/virtuoso-opensource</url>
+    <properties>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+    </properties>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <artifactId>maven-toolchains-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>use-jdk8</id>
+                        <goals>
+                            <goal>toolchain</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
