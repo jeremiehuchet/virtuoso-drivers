@@ -1,0 +1,23 @@
+name: publish virtuoso jdbc
+on:
+  push:
+    tags:
+      - virtuoso-jdbc-*
+jobs:
+  build:
+    name: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: cachix/install-nix-action@v11
+        with:
+          nix_path: nixpkgs=channel:nixos-20.03
+      - env:
+          GPG_PASSPHRASE_JDK6: ${{ secrets.GPG_PASSPHRASE_JDK6 }}
+        run: ./.github/fetch-jdk6.sh
+      - env:
+          BINTRAY_USERNAME: ${{ secrets.BINTRAY_USERNAME }}
+          BINTRAY_TOKEN: ${{ secrets.BINTRAY_TOKEN }}
+        run: |
+          nix-shell --pure --keep BINTRAY_USERNAME --keep BINTRAY_TOKEN \
+              --run "mvn -B deploy -pl virtuoso-jdbc-4.0,virtuoso-jdbc-4.1,virtuoso-jdbc-4.2"
