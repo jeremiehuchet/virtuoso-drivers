@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.openlink</groupId>
+    <artifactId>virtuoso-parent</artifactId>
+    <packaging>pom</packaging>
+    <name>Virtuoso Java libraries</name>
+    <version>1</version>
+    <description>Java librarires for Virtuoso database</description>
+    <url>https://github.com/openlink/virtuoso-opensource</url>
+    <organization>
+        <name>OpenLink Software</name>
+        <url>https://www.openlinksw.com</url>
+    </organization>
+    <licenses>
+        <license>
+            <name>GNU General Public License Version 2</name>
+            <url>https://spdx.org/licenses/GPL-2.0.txt</url>
+            <comments>
+                <![CDATA[
+License
+=======
+
+*Copyright (C) 1998-2020 OpenLink Software <vos.admin@openlinksw.com>*
+
+OpenLink Software's Virtuoso Open-Source (VOS) project
+------------------------------------------------------
+This software is licensed under the GNU General Public License (see
+[COPYING](COPYING.md)).
+
+Note that the only valid version of the GPL license as far as this project
+is concerned is the original GNU General Public License Version 2, dated
+June 1991.
+
+OpenSSL exemption
+-----------------
+This project may be compiled/linked with the OpenSSL library. If so, the
+following exemption is added to the above license:
+
+    In addition, as a special exemption, OpenLink Software gives
+    permission to link the code of its release of Virtuoso with the
+    OpenSSL project's "OpenSSL" library (or with modified versions
+    of it that use the same license as the "OpenSSL" library), and
+    distribute the linked executables. You must obey the GNU General
+    Public License in all respects for all of the code used other
+    than "OpenSSL".
+
+
+Client Protocol Driver exemptions
+---------------------------------
+
+    In addition, as a special exemption, OpenLink Software gives
+    permission to use the unmodified client libraries (ODBC, JDBC,
+    ADO.NET, OleDB, Jena, Sesame and Redland providers) in your own
+    application whether open-source or not, with no obligation to use
+    the GPL on the resulting application. In all other respects you
+    must abide by the terms of the GPL.
+]]>
+            </comments>
+        </license>
+    </licenses>
+    <distributionManagement>
+        <repository>
+            <id>bintray-virtuoso-drivers</id>
+            <name>Virtuoso maven repository</name>
+            <url>https://dl.bintray.com/jeremiehuchet/virtuoso-drivers</url>
+        </repository>
+    </distributionManagement>
+    <modules>
+        <module>virtuoso-jdbc-4.0</module>
+        <module>virtuoso-jdbc-4.1</module>
+        <module>virtuoso-jdbc-4.2</module>
+    </modules>
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+    <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>..</directory>
+                <includes>
+                    <include>LICENSE*</include>
+                </includes>
+            </resource>
+        </resources>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>flatten-maven-plugin</artifactId>
+                    <version>1.2.2</version>
+                    <configuration>
+                        <flattenMode>oss</flattenMode>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>flatten-pom</id>
+                            <phase>process-resources</phase>
+                            <goals>
+                                <goal>flatten</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>flatten-pom-cleanup</id>
+                            <phase>clean</phase>
+                            <goals>
+                                <goal>clean</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-toolchains-plugin</artifactId>
+                    <version>3.0.0</version>
+                    <executions>
+                        <execution>
+                            <id>use-jdk6</id>
+                            <configuration>
+                                <toolchains>
+                                    <jdk>
+                                        <version>1.6</version>
+                                    </jdk>
+                                </toolchains>
+                            </configuration>
+                        </execution>
+                        <execution>
+                            <id>use-jdk7</id>
+                            <configuration>
+                                <toolchains>
+                                    <jdk>
+                                        <version>1.7</version>
+                                    </jdk>
+                                </toolchains>
+                            </configuration>
+                        </execution>
+                        <execution>
+                            <id>use-jdk8</id>
+                            <configuration>
+                                <toolchains>
+                                    <jdk>
+                                        <version>1.8</version>
+                                    </jdk>
+                                </toolchains>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>versions-maven-plugin</artifactId>
+                    <version>2.7</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.1.0</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-compliler-plugin</artifactId>
+                    <version>3.8.1</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.2.0</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-source-plugin</artifactId>
+                    <version>3.2.0</version>
+                    <executions>
+                        <execution>
+                            <id>attach-sources</id>
+                            <phase>package</phase>
+                            <goals>
+                                <goal>jar-no-fork</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <version>3.2.0</version>
+                    <configuration>
+                        <failOnError>false</failOnError>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>attach-javadocs</id>
+                            <phase>package</phase>
+                            <goals>
+                                <goal>jar</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>2.8.2</version>
+                    <configuration>
+                        <deployAtEnd>true</deployAtEnd>
+                        <altDeploymentRepository>bintray-virtuoso-drivers::default::https://api.bintray.com/maven/jeremiehuchet/virtuoso-drivers/${project.artifactId}/;publish=1</altDeploymentRepository>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <plugin>
+                <artifactId>maven-source-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <artifactId>maven-javadoc-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <inherited>false</inherited>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
