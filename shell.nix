@@ -13,7 +13,7 @@ let
 in pkgs.mkShell {
   name = "virtuoso-build-env";
 
-  buildInputs = with pkgs; [ gitAndTools.gitFull nix-prefetch-github maven xmlstarlet dependencies.dhall-json ];
+  buildInputs = with pkgs; [ gitAndTools.gitFull gitAndTools.hub jq nix-prefetch-github maven xmlstarlet dependencies.dhall-json ];
 
   LC_ALL = "C";
   JDK6_HOME = dependencies.jdk6;

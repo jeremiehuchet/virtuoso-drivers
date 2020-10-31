@@ -1,0 +1,50 @@
+name: check updates
+on:
+  label:
+    types: [created, deleted]
+#  schedule:
+#    - cron: "0 3 * * 1"
+jobs:
+  check_updates:
+    name: check updates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: install xmlstarlet
+        run: sudo apt-get install -qqy xmlstarlet
+      - name: compare current versions checksums
+        run: |
+          ./.github/check-update.jdbc.sh 568b25bdbe02ce4ee7f9f4fc79727bb47940675e || (
+            echo "JDBC_UPDATE_AVAILBALE=true" >> $GITHUB_ENV
+          )
+      - name: stop when no update available
+        uses: andymckay/cancel-action@0.2
+        if: env.JDBC_UPDATE_AVAILBALE != 'true'
+
+  open_pr:
+    name: open pull request
+    needs:
+      - check_updates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: install nix
+        uses: cachix/install-nix-action@v11
+        with:
+          nix_path: nixpkgs=channel:nixos-20.03
+
+      - env:
+          GPG_PASSPHRASE_JDK6: ${{ secrets.GPG_PASSPHRASE_JDK6 }}
+        run: ./.github/fetch-jdk6.sh
+
+      - name: update sources
+        run: nix-shell --run "./.github/update-sources.jdbc.sh 568b25bdbe02ce4ee7f9f4fc79727bb47940675e"
+
+      - name: validate build
+        run: nix-shell --pure --run "mvn -B package"
+
+      - name: commit and open pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: nix-shell --run "./.github/open-pr.sh 'JDBC drivers' 'libsrc/JDBCDriverType4'"

@@ -67,7 +67,7 @@ For instance, `41.3.115.jre7` is:
 - version 3.115
 - compatible with JRE 7+
 
-And `41.3.115` is the same but for latest JRE (8+).
+And `42.3.115` is the same but for latest JRE (8+).
 
 ## About
 
@@ -82,7 +82,7 @@ But it's easier to use in maven projects 🎉
 
 Currently, the original driver source contains _C preprocessor_ instructions (see for instance [virtuoso.jdbc.Driver](https://github.com/openlink/virtuoso-opensource/blob/97d31f7c3818fffec849258f2c2e932949e7c6ba/libsrc/JDBCDriverType4/virtuoso/jdbc/Driver.java#L541)). It makes the build toolchain somewhat complex for java focused developers used to maven conventions.
 
-I used (mostly for fun) nix package manager to set up the required tools with the right version. After installing nix, you should be able to run `nix-build '<nixpkgs/nixos>' virtuoso-java-sources.nix` to generate an output with the Virtuoso JDBC drivers rouces files.
+I used (mostly for fun) nix package manager to set up the required tools with the right version. After installing nix, you should be able to run `nix-build virtuoso-java-sources.nix` to generate an output with the Virtuoso JDBC drivers rouces files.
 
 Finally, I rearranged files to suit maven standard project layout, but **I didn't modify them**. This way I was able to publish libraries easily to a maven repository.
 
