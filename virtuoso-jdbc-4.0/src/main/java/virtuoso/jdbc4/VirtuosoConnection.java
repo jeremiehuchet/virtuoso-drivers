@@ -3,6 +3,9 @@ import java.sql.*;
 import java.net.*;
 import java.io.*;
 import java.util.*;
+import java.security.*;
+import java.security.cert.*;
+import javax.net.ssl.*;
 import openlink.util.*;
 import java.util.Vector;
 import openlink.util.OPLHeapNClob;
@@ -29,12 +32,20 @@ public class VirtuosoConnection implements Connection
    private boolean global_transaction = false;
    private String url;
    private String user, password, pwdclear;
+   private String cert_alias;
+   private String keystore_path, keystore_pass;
+   private String truststore_path, truststore_pass;
+   private String ssl_provider;
+   private boolean use_ssl;
+   private String con_delegate;
    private int trxisolation = Connection.TRANSACTION_REPEATABLE_READ;
    private boolean readOnly = false;
-   protected int timeout = 60;
+   protected int timeout_def = 60*1000;
+   protected int timeout = 0;
    protected int txn_timeout = 0;
    protected int fbs = VirtuosoTypes.DEFAULTPREFETCH;
    protected boolean utf8_execs = false;
+   protected int timezoneless_datetimes = 0;
    protected VirtuosoPooledConnection pooled_connection = null;
    protected VirtuosoXAConnection xa_connection = null;
    protected String charset;
@@ -46,6 +57,8 @@ public class VirtuosoConnection implements Connection
   private LRUCache<String,VirtuosoPreparedStatement> pStatementCache;
   private boolean useCachePrepStatements = false;
   private Vector<VhostRec> hostList = new Vector<VhostRec>();
+   protected boolean rdf_type_loaded = false;
+   protected boolean rdf_lang_loaded = false;
   private boolean useRoundRobin;
    protected class VhostRec
    {
@@ -123,7 +136,7 @@ public class VirtuosoConnection implements Connection
       if (prop.get("charset") != null)
       {
  charset = (String)prop.get("charset");
- if (charset.indexOf("UTF-8") != -1)
+ if (charset.toUpperCase().indexOf("UTF-8") != -1)
  {
      this.charset = null;
      this.charset_utf8 = true;
@@ -131,19 +144,29 @@ public class VirtuosoConnection implements Connection
       }
       user = (String)prop.get("user");
       if(user == null || user.equals(""))
-         user = "anonymous";
+         user = "";
       password = (String)prop.get("password");
-      if(password == null)
+      if (password == null)
          password = "";
-      if(prop.get("timeout") != null)
-     timeout = Integer.parseInt(prop.getProperty("timeout"));
+      timeout = getIntAttr(prop, "timeout", timeout)*1000;
       pwdclear = (String)prop.get("pwdclear");
-      if(prop.get("sendbs") != null)
-     sendbs = Integer.parseInt(prop.getProperty("sendbs"));
-      if(prop.get("recvbs") != null)
-     recvbs = Integer.parseInt(prop.getProperty("recvbs"));
-      if(prop.get("fbs") != null)
-     fbs = Integer.parseInt(prop.getProperty("fbs"));
+      sendbs = getIntAttr(prop, "sendbs", sendbs);
+      if (sendbs <= 0)
+          sendbs = 32768;
+      recvbs = getIntAttr(prop, "recvbs", recvbs);
+      if (recvbs <= 0)
+          recvbs = 32768;
+      fbs = getIntAttr(prop, "fbs", fbs);
+      if (fbs <= 0)
+          fbs = VirtuosoTypes.DEFAULTPREFETCH;;
+      truststore_path = (String)prop.get("truststorepath");
+      truststore_pass = (String)prop.get("truststorepass");
+      keystore_pass = (String)prop.get("keystorepass");
+      keystore_path = (String)prop.get("keystorepath");
+      ssl_provider = (String)prop.get("provider");
+      cert_alias = (String)prop.get("cert");
+      use_ssl = getBoolAttr(prop, "ssl", false);
+      con_delegate = (String)prop.get("delegate");
       if(pwdclear == null)
          pwdclear = "0";
       futures = new Hashtable<Integer,VirtuosoFuture>();
@@ -158,6 +181,28 @@ public class VirtuosoConnection implements Connection
       if (hostList.size() <= 1)
         useRoundRobin = false;
       connect(host,port,(String)prop.get("database"), sendbs, recvbs, (prop.get("log_enable") != null ? (Integer.parseInt(prop.getProperty("log_enable"))) : -1));
+   }
+   public synchronized boolean isConnectionLost(int timeout_sec)
+   {
+     ResultSet rs = null;
+     Statement st = null;
+     try{
+        st = createStatement();
+ st.setQueryTimeout(timeout_sec);
+        rs = st.executeQuery("select 1");
+        return false;
+     } catch (Exception e ) {
+        return true;
+     } finally {
+       if (rs!=null)
+         try{
+           rs.close();
+         } catch(Exception e){}
+       if (st!=null)
+         try{
+           st.close();
+         } catch(Exception e){}
+     }
    }
    protected int getIntAttr(java.util.Properties info, String key, int def)
    {
@@ -199,7 +244,8 @@ public class VirtuosoConnection implements Connection
           }
           break;
         } catch (VirtuosoException e) {
-          if (e.getErrorCode() != VirtuosoException.IOERROR)
+          int erc = e.getErrorCode();
+          if (erc != VirtuosoException.IOERROR && erc != VirtuosoException.NOLICENCE)
             throw e;
           hostIndex++;
           if (useRoundRobin) {
@@ -213,9 +259,18 @@ public class VirtuosoConnection implements Connection
           }
         }
       }
-      if(db!=null) new VirtuosoStatement(this).executeQuery("use "+db);
+      if(db!=null)
+        try {
+          new VirtuosoStatement(this).executeQuery("use "+db);
+        } catch (VirtuosoException ve) {
+          throw new VirtuosoException(ve, "Could not execute 'use "+db+"'", VirtuosoException.SQLERROR);
+        }
       if (log_enable >= 0 && log_enable <= 3)
-        new VirtuosoStatement(this).executeQuery("log_enable ("+log_enable+")");
+        try {
+          new VirtuosoStatement(this).executeQuery("log_enable ("+log_enable+")");
+        } catch (VirtuosoException ve) {
+          throw new VirtuosoException(ve, "Could not execute 'log_enable("+log_enable+")'", VirtuosoException.SQLERROR);
+        }
    }
    private long cdef_param (openlink.util.Vector cdefs, String name, long deflt)
      {
@@ -228,12 +283,88 @@ public class VirtuosoConnection implements Connection
     }
        return deflt;
      }
+   private Object[] fill_login_info_array ()
+   {
+       Object[] ret = new Object[7];
+       ret[0] = new String ("JDBC");
+       ret[1] = new Integer (0);
+       ret[2] = new String ("");
+       ret[3] = System.getProperty("os.name");
+       ret[4] = new String ("");
+       ret[5] = new Integer (0);
+       ret[6] = new String (con_delegate != null ? con_delegate : "");
+       return ret;
+   }
+    private Collection getCertificates(InputStream fis)
+     throws CertificateException
+    {
+        CertificateFactory cf;
+        cf = CertificateFactory.getInstance("X.509");
+        return cf.generateCertificates(fis);
+    }
   private void connect(String host, int port, int sendbs, int recvbs) throws VirtuosoException
    {
+      String fname = null;
       try
       {
+        if(use_ssl || truststore_path != null || keystore_path != null)
+   {
+               if (ssl_provider != null && ssl_provider.length() != 0) {
+  Security.addProvider((Provider)(Class.forName(ssl_provider).newInstance()));
+       }
+               SSLContext ssl_ctx = SSLContext.getInstance("TLS");
+               X509TrustManager tm = new VirtX509TrustManager();
+  KeyManager []km = null;
+               TrustManager[] tma = null;
+               KeyStore tks = null;
+               if (truststore_path.length() > 0) {
+                   InputStream fis = null;
+                   String keys_pwd = (truststore_pass != null) ? truststore_pass : "";
+                   String alg = TrustManagerFactory.getDefaultAlgorithm();
+                   TrustManagerFactory tmf = TrustManagerFactory.getInstance(alg);
+                   tks = KeyStore.getInstance("JKS");
+                   try {
+                     fname = truststore_path;
+                     fis = new FileInputStream(truststore_path);
+                     if (truststore_path.endsWith(".pem") || truststore_path.endsWith(".crt") || truststore_path.endsWith(".p7b"))
+                       {
+                         tks.load(null);
+                         Collection certs = getCertificates(fis);
+                         if (certs!=null)
+                           {
+                             int i=0;
+                             for(Iterator it=certs.iterator(); it.hasNext();)
+                             {
+                               tks.setCertificateEntry("cert"+i, (java.security.cert.Certificate) it.next());
+                               i++;
+                             }
+                           }
+       }
+     else
+                       tks.load(fis, keys_pwd.toCharArray());
+                   } finally {
+                     if (fis!=null)
+                       fis.close();
+                   }
+                   tmf.init(tks);
+                   tma = tmf.getTrustManagers();
+               } else {
+                   tma = new TrustManager[]{tm};
+               }
+               if (keystore_path.length() > 0 && keystore_pass.length() > 0) {
+                   String keys_file = (keystore_path != null) ? keystore_path : System.getProperty("user.home") + System.getProperty("file.separator");
+                   String keys_pwd = (keystore_pass != null) ? keystore_pass : "";
+                   fname = keys_file;
+                   km = new KeyManager[]{new VirtX509KeyManager(cert_alias, keys_file, keys_pwd, tks)};
+       }
+               ssl_ctx.init(km, tma, new SecureRandom());
+               socket = ((SSLSocketFactory) ssl_ctx.getSocketFactory()).createSocket(host, port);
+     ((SSLSocket)socket).startHandshake();
+   }
+ else
   socket = new Socket(host,port);
-  socket.setSoTimeout(timeout*1000);
+  if (timeout > 0)
+    socket.setSoTimeout(timeout);
   socket.setTcpNoDelay(true);
          socket.setReceiveBufferSize(recvbs);
          socket.setSendBufferSize(sendbs);
@@ -249,7 +380,7 @@ public class VirtuosoConnection implements Connection
       if (result_future.size() > 2)
         {
    openlink.util.Vector caller_id_opts = (openlink.util.Vector)result_future.elementAt(2);
-   int pwd_clear_code = (int) cdef_param (caller_id_opts, "SQL_ENCRYPTION_ON_PASSWORD", -1);
+   int pwd_clear_code = (int) cdef_param (caller_id_opts, "SQL_ENCRYPTION_ON_PASSWORD", 3);
    switch (pwd_clear_code)
      {
        case 1: pwdclear = "cleartext"; break;
@@ -258,7 +389,7 @@ public class VirtuosoConnection implements Connection
      }
         }
       removeFuture(future);
-      Object[] args = new Object[3];
+      Object[] args = new Object[4];
       args[0] = user;
       if (pwdclear != null && pwdclear.equals ("cleartext"))
         {
@@ -273,6 +404,7 @@ public class VirtuosoConnection implements Connection
    args[1] = MD5.md5_digest (user, password, peer_name);
         }
       args[2] = VirtuosoTypes.version;
+      args[3] = new openlink.util.Vector (fill_login_info_array ());
       future = getFuture(VirtuosoFuture.scon,args, this.timeout);
       result_future = (openlink.util.Vector)future.nextResult();
       if(!(result_future.firstElement() instanceof Short))
@@ -320,9 +452,14 @@ public class VirtuosoConnection implements Connection
       }
     else
       client_charset = null;
-    timeout = (int) (cdef_param (client_defaults, "SQL_QUERY_TIMEOUT", timeout * 1000) / 1000);
-    socket.setSoTimeout(timeout*1000);
-    txn_timeout = (int) (cdef_param (client_defaults, "SQL_TXN_TIMEOUT", txn_timeout * 1000)/ 1000);
+    if (timeout <= 0) {
+      timeout = (int) (cdef_param (client_defaults, "SQL_QUERY_TIMEOUT", timeout_def));
+    }
+                         if (timeout > 0)
+      socket.setSoTimeout(timeout);
+    if (txn_timeout <= 0) {
+      txn_timeout = (int) (cdef_param (client_defaults, "SQL_TXN_TIMEOUT", txn_timeout * 1000)/1000);
+    }
     trxisolation = (int) cdef_param (client_defaults, "SQL_TXN_ISOLATION", trxisolation);
     utf8_execs = cdef_param (client_defaults, "SQL_UTF8_EXECS", 0) != 0;
     if (!utf8_execs && cdef_param (client_defaults, "SQL_NO_CHAR_C_ESCAPE", 0) != 0)
@@ -330,6 +467,7 @@ public class VirtuosoConnection implements Connection
           "Not using UTF-8 encoding of SQL statements, " +
           "but processing character escapes also disabled",
           VirtuosoException.MISCERROR);
+    timezoneless_datetimes = (int) cdef_param (client_defaults, "SQL_TIMEZONELESS_DATETIMES", 0);
     break;
        case VirtuosoTypes.QA_ERROR:
     removeFuture(future);
@@ -352,21 +490,53 @@ public class VirtuosoConnection implements Connection
       {
          throw new VirtuosoException("Class not found: " + e.getMessage(),VirtuosoException.MISCERROR);
       }
+      catch(FileNotFoundException e)
+      {
+         throw new VirtuosoException("Connection failed: "+ e.getMessage(),VirtuosoException.IOERROR);
+      }
       catch(IOException e)
       {
-         throw new VirtuosoException("Connection failed: " + e.getMessage(),VirtuosoException.IOERROR);
+         throw new VirtuosoException("Connection failed: ["+(fname!=null?fname:"")+"] "+e.getMessage(),VirtuosoException.IOERROR);
+      }
+      catch(ClassNotFoundException e)
+      {
+         throw new VirtuosoException("Class not found: " + e.getMessage(),VirtuosoException.MISCERROR);
+      }
+      catch(InstantiationException e)
+      {
+         throw new VirtuosoException("Class cannot be created: " + e.getMessage(),VirtuosoException.MISCERROR);
+      }
+      catch(IllegalAccessException e)
+      {
+         throw new VirtuosoException("Class cannot be accessed: " + e.getMessage(),VirtuosoException.MISCERROR);
+      }
+      catch(NoSuchAlgorithmException e)
+      {
+         throw new VirtuosoException("Encryption failed: " + e.getMessage(),VirtuosoException.MISCERROR);
+      }
+      catch(KeyStoreException e)
+      {
+         throw new VirtuosoException("Encryption failed: " + e.getMessage(),VirtuosoException.MISCERROR);
+      }
+      catch(KeyManagementException e)
+      {
+         throw new VirtuosoException("Encryption failed: " + e.getMessage(),VirtuosoException.MISCERROR);
+      }
+      catch(CertificateException e)
+      {
+         throw new VirtuosoException("Encryption failed: " + e.getMessage(),VirtuosoException.MISCERROR);
+      }
+      catch(UnrecoverableKeyException e)
+      {
+         throw new VirtuosoException("Encryption failed: ["+(fname!=null?fname:"") +"]" + e.getMessage(),VirtuosoException.MISCERROR);
       }
    }
    protected void write_object(Object obj) throws IOException, VirtuosoException
    {
      if (VirtuosoFuture.rpc_log != null)
        {
-  synchronized (VirtuosoFuture.rpc_log)
-    {
-      VirtuosoFuture.rpc_log.print ("(conn " + hashCode() + ") OUT ");
+      VirtuosoFuture.rpc_log.print ("  >> (conn " + hashCode() + ") OUT ");
       VirtuosoFuture.rpc_log.println (obj != null ? obj.toString() : "<null>");
-      VirtuosoFuture.rpc_log.flush();
-    }
        }
     try {
         out.write_object(obj);
@@ -428,6 +598,14 @@ public class VirtuosoConnection implements Connection
      futures.put(new Integer(this_req_no),fut);
      return fut;
    }
+   protected void clearFutures()
+   {
+     if (futures != null)
+        synchronized (futures)
+        {
+   futures.clear();
+        }
+   }
    protected void removeFuture(VirtuosoFuture fut)
    {
      if (futures != null)
@@ -463,12 +641,8 @@ public class VirtuosoConnection implements Connection
      }
      if (VirtuosoFuture.rpc_log != null)
        {
-  synchronized (VirtuosoFuture.rpc_log)
-    {
-      VirtuosoFuture.rpc_log.print ("(conn " + hashCode() + ") IN ");
+      VirtuosoFuture.rpc_log.print ("  << (conn " + hashCode() + ") IN ");
       VirtuosoFuture.rpc_log.println (_result != null ? _result.toString() : "<null>");
-      VirtuosoFuture.rpc_log.flush();
-    }
        }
      try
        {
@@ -487,13 +661,9 @@ public class VirtuosoConnection implements Connection
        {
          if (VirtuosoFuture.rpc_log != null)
            {
-             synchronized (VirtuosoFuture.rpc_log)
-               {
-                 VirtuosoFuture.rpc_log.println ("(conn " + hashCode() + ") **** runtime2 " +
+                 VirtuosoFuture.rpc_log.println ("  **(conn " + hashCode() + ") **** runtime2 " +
                      e.getClass().getName() + " in read_request");
                  e.printStackTrace(VirtuosoFuture.rpc_log);
-   VirtuosoFuture.rpc_log.flush();
-               }
            }
          throw new Error (e.getClass().getName() + ":" + e.getMessage());
        }
@@ -539,30 +709,32 @@ public class VirtuosoConnection implements Connection
    }
    public void close() throws VirtuosoException
    {
+      if (isClosed())
+        return;
       try
       {
-         if(isClosed())
-            throw new VirtuosoException("The connection is already closed.",VirtuosoException.DISCONNECTED);
-         if(!in.isClosed())
-         {
-            in.close();
-            in = null;
+         synchronized(this) {
+           if(!in.isClosed())
+           {
+             in.close();
+             in = null;
+           }
+           if(!out.isClosed())
+           {
+             out.close();
+             out = null;
+           }
+           if(socket != null)
+           {
+             socket.close();
+             socket = null;
+           }
+           pStatementCache.clear();
+           user = url = password = null;
+           futures = null;
+           pooled_connection = null;
+           xa_connection = null;
          }
-         if(!out.isClosed())
-         {
-            out.close();
-            out = null;
-         }
-         if(socket != null)
-         {
-            socket.close();
-            socket = null;
-         }
-         pStatementCache.clear();
-         user = url = password = null;
-         futures = null;
-         pooled_connection = null;
-         xa_connection = null;
       }
       catch(IOException e)
       {
@@ -721,6 +893,20 @@ public class VirtuosoConnection implements Connection
    }
    public void setCatalog(String catalog) throws VirtuosoException
    {
+      VirtuosoStatement st = null;
+      if (catalog!=null) {
+        try {
+          st = new VirtuosoStatement(this);
+          st.executeQuery("use "+catalog);
+          qualifier = catalog;
+        } finally {
+          if (st!=null) {
+            try {
+              st.close();
+            } catch (Exception e) {}
+          }
+        }
+      }
    }
    public String getCatalog() throws VirtuosoException
    {
@@ -738,7 +924,7 @@ public class VirtuosoConnection implements Connection
       try
  {
    if (timeout != -1)
-     socket.setSoTimeout (timeout * 1000);
+     socket.setSoTimeout (timeout);
  }
       catch (java.net.SocketException e)
  {
@@ -812,7 +998,6 @@ public class VirtuosoConnection implements Connection
    protected byte[] charsetBytes1(String source, String from, String to) throws VirtuosoException
     {
        byte ans[] = new byte[0];
-       System.err.println ("charsetBytes1(" + from + " , " + to);
        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream( source.length() );
        try
   {
@@ -938,6 +1123,11 @@ public class VirtuosoConnection implements Connection
      {
        return prepareStatement (sql);
      }
+   synchronized void checkClosed() throws SQLException
+   {
+        if (isClosed())
+            throw new VirtuosoException("The connection is already closed.",VirtuosoException.DISCONNECTED);
+    }
   public Clob createClob() throws SQLException
   {
     return new VirtuosoBlob();
@@ -954,10 +1144,26 @@ public class VirtuosoConnection implements Connection
   {
      throw new VirtuosoFNSException ("createSQLXML()  not supported", VirtuosoException.NOTIMPLEMENTED);
   }
-   public boolean isValid(int timeout) throws SQLException
-   {
-     throw new VirtuosoFNSException ("isValid(timeout)  not supported", VirtuosoException.NOTIMPLEMENTED);
-   }
+  public boolean isValid(int _timeout) throws SQLException
+  {
+    if (isClosed())
+      return false;
+    boolean isLost = true;
+    try {
+      try {
+        isLost = isConnectionLost(_timeout);
+      } catch (Throwable t) {
+        try {
+          abortInternal();
+        } catch (Throwable ignoreThrown) {
+        }
+        return false;
+      }
+    } catch (Throwable t) {
+      return false;
+    }
+    return !isLost;
+  }
   public void setClientInfo(String name, String value) throws SQLClientInfoException
   {
     Map<String, ClientInfoStatus> fail = new HashMap<String, ClientInfoStatus>();
@@ -985,7 +1191,12 @@ public class VirtuosoConnection implements Connection
   }
   public Array createArrayOf(String typeName, Object[] elements) throws SQLException
   {
-    throw new VirtuosoFNSException ("createArrayOf(typeName, elements)  not supported", VirtuosoException.NOTIMPLEMENTED);
+      checkClosed();
+      if (typeName == null)
+          throw new VirtuosoException("typeName is null.",VirtuosoException.MISCERROR);
+      if (elements == null)
+          return null;
+      return new VirtuosoArray(this, typeName, elements);
   }
   public Struct createStruct(String typeName, Object[] attributes) throws SQLException
   {
@@ -993,8 +1204,6 @@ public class VirtuosoConnection implements Connection
   }
   public <T> T unwrap(java.lang.Class<T> iface) throws java.sql.SQLException
   {
-    if(isClosed())
-      throw new VirtuosoException("The connection is already closed.",VirtuosoException.DISCONNECTED);
     try {
       return iface.cast(this);
     } catch (ClassCastException cce) {
@@ -1006,6 +1215,15 @@ public class VirtuosoConnection implements Connection
     if(isClosed())
       throw new VirtuosoException("The connection is closed.",VirtuosoException.DISCONNECTED);
     return iface.isInstance(this);
+  }
+  private void abortInternal() throws java.sql.SQLException
+  {
+    if (isClosed())
+      return;
+    try {
+        close();
+    } catch (Throwable t) {
+    }
   }
   private void createCaches(int cacheSize)
   {
@@ -1042,22 +1260,14 @@ public class VirtuosoConnection implements Connection
     boolean getGlobalTransaction() {
     if (VirtuosoFuture.rpc_log != null)
     {
-        synchronized (VirtuosoFuture.rpc_log)
-        {
      VirtuosoFuture.rpc_log.println ("VirtuosoConnection.getGlobalTransaction () (con=" + this.hashCode() + ") :" + global_transaction);
-     VirtuosoFuture.rpc_log.flush();
-        }
     }
         return global_transaction;
     }
     void setGlobalTransaction(boolean value) {
     if (VirtuosoFuture.rpc_log != null)
     {
-        synchronized (VirtuosoFuture.rpc_log)
-        {
      VirtuosoFuture.rpc_log.println ("VirtuosoConnection.getGlobalTransaction (" + value + ") (con=" + this.hashCode() + ") :" + global_transaction);
-     VirtuosoFuture.rpc_log.flush();
-        }
     }
         global_transaction = value;
     }
@@ -1107,5 +1317,96 @@ public class VirtuosoConnection implements Connection
         return true;
       else
         return false;
+    }
+}
+class VirtX509TrustManager implements X509TrustManager
+{
+  public boolean isClientTrusted(java.security.cert.X509Certificate[] chain)
+    {
+      return true;
+    }
+  public boolean isServerTrusted(java.security.cert.X509Certificate[] chain)
+    {
+      return true;
+    }
+  public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException
+    {
+    }
+  public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException
+    {
+    }
+  public X509Certificate[] getAcceptedIssuers()
+    {
+      return null;
+    }
+}
+class VirtX509KeyManager extends X509ExtendedKeyManager {
+    X509KeyManager defaultKeyManager;
+    String defAlias;
+    KeyStore tks;
+    ArrayList<X509Certificate> certs = new ArrayList<X509Certificate>(32);
+    public VirtX509KeyManager(String cert_alias, String keys_file, String keys_pwd, KeyStore tks)
+            throws KeyStoreException, NoSuchAlgorithmException, CertificateException, IOException, UnrecoverableKeyException
+    {
+        KeyManager[] km;
+        KeyStore ks;
+        if (keys_file.endsWith(".p12") || keys_file.endsWith(".pfx"))
+            ks = KeyStore.getInstance("PKCS12");
+        else
+            ks = KeyStore.getInstance("JKS");
+        InputStream is = null;
+        try {
+          is = new FileInputStream(keys_file);
+          ks.load(is, keys_pwd.toCharArray());
+        } finally {
+          if (is!=null)
+            is.close();
+        }
+        if (cert_alias == null)
+          {
+            String alias = null;
+            Enumeration<String> en = ks.aliases();
+            while(en.hasMoreElements()) {
+                alias = en.nextElement();
+                ks.isKeyEntry(alias);
+                break;
+            }
+            defAlias = alias;
+          }
+        else
+          {
+            if (!ks.containsAlias(cert_alias))
+              throw new KeyStoreException("Could not found alias:["+cert_alias+"] in KeyStore :"+keys_file);
+            defAlias = cert_alias;
+          }
+        certs.add((X509Certificate) ks.getCertificate(defAlias));
+        if (tks!=null) {
+            for(Enumeration<String> en = tks.aliases(); en.hasMoreElements(); ) {
+                String alias = en.nextElement();
+                certs.add((X509Certificate) tks.getCertificate(alias));
+            }
+        }
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
+        kmf.init(ks, keys_pwd.toCharArray());
+        defaultKeyManager = (X509KeyManager)kmf.getKeyManagers()[0];
+    }
+    public String[] getClientAliases(String s, Principal[] principals) {
+        return defaultKeyManager.getClientAliases(s, principals);
+    }
+    public String chooseClientAlias(String[] keyType, Principal[] issuers, Socket socket)
+    {
+        return defAlias;
+    }
+    public String[] getServerAliases(String s, Principal[] principals) {
+        return defaultKeyManager.getServerAliases(s, principals);
+    }
+    public String chooseServerAlias(String s, Principal[] principals, Socket socket) {
+        return defaultKeyManager.chooseServerAlias(s, principals, socket);
+    }
+    public X509Certificate[] getCertificateChain(String s) {
+        return defaultKeyManager.getCertificateChain(s);
+    }
+    public PrivateKey getPrivateKey(String s) {
+        return defaultKeyManager.getPrivateKey(s);
     }
 }

@@ -164,7 +164,7 @@ class VirtuosoColumn
       case VirtuosoTypes.DV_BLOB_BIN:
  return Types.LONGVARBINARY;
       case VirtuosoTypes.DV_BLOB_WIDE:
- return -10;
+        return Types.LONGNVARCHAR;
       case VirtuosoTypes.DV_DATE:
  return Types.DATE;
       case VirtuosoTypes.DV_TIMESTAMP:
@@ -178,7 +178,7 @@ class VirtuosoColumn
  return Types.VARBINARY;
       case VirtuosoTypes.DV_WIDE:
       case VirtuosoTypes.DV_LONG_WIDE:
- return -9;
+        return Types.NVARCHAR;
       case VirtuosoTypes.DV_DB_NULL:
       case VirtuosoTypes.DV_NULL:
  return Types.NULL;

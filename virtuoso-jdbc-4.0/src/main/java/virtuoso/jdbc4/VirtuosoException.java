@@ -24,6 +24,11 @@ public class VirtuosoException extends SQLException
    {
       super(data,"42000",vendor);
    }
+   public VirtuosoException(Exception e, String data, int vendor)
+   {
+      super(data,"42000",vendor);
+      initCause (e);
+   }
    public VirtuosoException(String data, String sqlstate, int vendor)
    {
       super(data,sqlstate,vendor);

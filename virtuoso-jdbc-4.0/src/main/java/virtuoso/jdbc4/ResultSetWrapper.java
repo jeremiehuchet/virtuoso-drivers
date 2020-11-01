@@ -23,7 +23,7 @@ import java.sql.NClob;
 public class ResultSetWrapper implements ResultSet, Closeable {
   private ConnectionWrapper wconn;
   private StatementWrapper wstmt;
-  private ResultSet rs;
+  private volatile ResultSet rs;
   protected ResultSetWrapper(ConnectionWrapper _wconn, StatementWrapper _wstmt, ResultSet _rs) {
     wconn = _wconn;
     wstmt = _wstmt;
@@ -40,25 +40,27 @@ public class ResultSetWrapper implements ResultSet, Closeable {
     if (wconn != null)
       wconn.exceptionOccurred(sqlEx);
   }
-  public synchronized void finalize () throws Throwable {
+  public void finalize () throws Throwable {
     close();
   }
   public void close() throws SQLException {
     if (rs == null)
       return;
     check_close();
-    try {
-      rs.close();
-      if (wstmt == null)
-        wconn.removeObjFromClose(this);
-      else
-        wstmt.removeObjFromClose(this);
-      rs = null;
-      wstmt = null;
-      wconn = null;
-    } catch (SQLException ex) {
-      exceptionOccurred(ex);
-      throw ex;
+    synchronized(this) {
+      try {
+        rs.close();
+        if (wstmt == null)
+          wconn.removeObjFromClose(this);
+        else
+          wstmt.removeObjFromClose(this);
+        rs = null;
+        wstmt = null;
+        wconn = null;
+      } catch (SQLException ex) {
+        exceptionOccurred(ex);
+        throw ex;
+      }
     }
   }
   public boolean next() throws SQLException {
@@ -397,11 +399,7 @@ public class ResultSetWrapper implements ResultSet, Closeable {
   public ResultSetMetaData getMetaData() throws SQLException {
     check_close();
     try {
-      ResultSetMetaData rsmd = rs.getMetaData();
-      if (rsmd != null)
-        return new ResultSetMetaDataWrapper(rsmd, wconn);
-      else
-        return null;
+      return rs.getMetaData();
     } catch (SQLException ex) {
       exceptionOccurred(ex);
       throw ex;

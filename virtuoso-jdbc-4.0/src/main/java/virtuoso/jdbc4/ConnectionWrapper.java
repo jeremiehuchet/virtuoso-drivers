@@ -30,38 +30,37 @@ public class ConnectionWrapper implements java.sql.Connection {
   private Integer r_TxnIsolation;
   private Integer r_Holdability;
   private HashMap<Object,Object> objsToClose;
-  protected StmtCache pStmtPool;
-  private int maxStatements;
-  private Connection rconn;
+  private boolean isClosed = false;
+  private volatile Connection rconn;
   private VirtuosoPooledConnection pconn;
   public ConnectionWrapper(Connection rConn,
-                           VirtuosoPooledConnection pConn,
-                           LinkedList<Object> pStmtsPool,
-                           int _maxStatements)
+                           VirtuosoPooledConnection pConn)
   {
     rconn = rConn;
     pconn = pConn;
-    maxStatements = _maxStatements;
     objsToClose = new HashMap<Object,Object>(100);
-    pStmtPool = new StmtCache(this, pStmtsPool);
   }
-  public synchronized void finalize () throws Throwable {
-    close();
+  public void finalize () throws Throwable {
+      VirtuosoPooledConnection pc = pconn;
+      if (pc!=null)
+        pc.sendCloseEvent();
+      pconn = null;
   }
-  public synchronized void close() throws java.sql.SQLException {
-    if (rconn == null)
+  public void close() throws java.sql.SQLException {
+    if (rconn == null || isClosed)
       return;
-    if (pconn != null)
-      pconn.sendCloseEvent();
-    rconn = null;
-    pconn = null;
+    synchronized(this) {
+      if (pconn != null)
+        pconn.sendCloseEvent();
+      isClosed = true;
+      pconn = null;
+    }
   }
   protected synchronized void closeAll() throws SQLException{
-    pStmtPool.closeAll();
     close_objs();
     pconn = null;
     reset_XA();
-    if (rconn != null)
+    if (rconn != null && !rconn.isClosed())
       rconn.close();
     rconn = null;
   }
@@ -76,13 +75,8 @@ public class ConnectionWrapper implements java.sql.Connection {
   }
   public PreparedStatement prepareStatement(String sql) throws SQLException {
     try {
-      PreparedStatementWrapper pStmt;
       check_conn();
-      String stmtKey = sql;
-      if ((pStmt = pStmtPool.lookup(stmtKey)) != null)
-         return pStmt;
-      else
-         return new PreparedStatementWrapper(this, rconn.prepareStatement(sql), stmtKey);
+      return new PreparedStatementWrapper(this, rconn.prepareStatement(sql));
     } catch (SQLException ex) {
       exceptionOccurred(ex);
       throw ex;
@@ -249,18 +243,9 @@ public class ConnectionWrapper implements java.sql.Connection {
                                             int resultSetType,
                                             int resultSetConcurrency) throws SQLException {
     try {
-      PreparedStatementWrapper pStmt;
       check_conn();
-      StringBuffer tmpBuf = new StringBuffer(sql.length()+16);
-      tmpBuf.append(resultSetType); tmpBuf.append('#');
-      tmpBuf.append(resultSetConcurrency); tmpBuf.append('#');
-      tmpBuf.append(sql);
-      String stmtKey = tmpBuf.toString();
-      if ((pStmt = pStmtPool.lookup(stmtKey)) != null)
-         return pStmt;
-      else
-         return new PreparedStatementWrapper(this, rconn.prepareStatement(sql,
-            resultSetType, resultSetConcurrency), stmtKey);
+      return new PreparedStatementWrapper(this, rconn.prepareStatement(sql,
+            resultSetType, resultSetConcurrency));
     } catch (SQLException ex) {
       exceptionOccurred(ex);
       throw ex;
@@ -380,19 +365,9 @@ public class ConnectionWrapper implements java.sql.Connection {
                                    throws SQLException
   {
     try {
-      PreparedStatementWrapper pStmt;
       check_conn();
-      StringBuffer tmpBuf = new StringBuffer(sql.length()+16);
-      tmpBuf.append(resultSetType); tmpBuf.append('#');
-      tmpBuf.append(resultSetConcurrency); tmpBuf.append('#');
-      tmpBuf.append(resultSetHoldability); tmpBuf.append('#');
-      tmpBuf.append(sql);
-      String stmtKey = tmpBuf.toString();
-      if ((pStmt = pStmtPool.lookup(stmtKey)) != null)
-         return pStmt;
-      else
-         return new PreparedStatementWrapper(this, rconn.prepareStatement(sql,
-            resultSetType, resultSetConcurrency, resultSetHoldability), stmtKey);
+      return new PreparedStatementWrapper(this, rconn.prepareStatement(sql,
+            resultSetType, resultSetConcurrency, resultSetHoldability));
     } catch (SQLException ex) {
       exceptionOccurred(ex);
       throw ex;
@@ -418,17 +393,9 @@ public class ConnectionWrapper implements java.sql.Connection {
                                    throws SQLException
   {
     try {
-      PreparedStatementWrapper pStmt;
       check_conn();
-      StringBuffer tmpBuf = new StringBuffer(sql.length()+16);
-      tmpBuf.append(flag); tmpBuf.append('#');
-      tmpBuf.append(sql);
-      String stmtKey = tmpBuf.toString();
-      if ((pStmt = pStmtPool.lookup(stmtKey)) != null)
-         return pStmt;
-      else
-         return new PreparedStatementWrapper(this, rconn.prepareStatement(sql,
-            flag), stmtKey);
+      return new PreparedStatementWrapper(this, rconn.prepareStatement(sql,
+            flag));
     } catch (SQLException ex) {
       exceptionOccurred(ex);
       throw ex;
@@ -439,22 +406,9 @@ public class ConnectionWrapper implements java.sql.Connection {
                                    throws SQLException
   {
     try {
-      PreparedStatementWrapper pStmt;
       check_conn();
-      StringBuffer tmpBuf = new StringBuffer(sql.length()+16);
-      tmpBuf.append('$');
-      if (columnIndexes != null) {
-        for(int i = 0; i < columnIndexes.length; i++)
-          tmpBuf.append(columnIndexes[i]);
-      }
-      tmpBuf.append('$'); tmpBuf.append('#');
-      tmpBuf.append(sql);
-      String stmtKey = tmpBuf.toString();
-      if ((pStmt = pStmtPool.lookup(stmtKey)) != null)
-         return pStmt;
-      else
-         return new PreparedStatementWrapper(this, rconn.prepareStatement(sql,
-            columnIndexes), stmtKey);
+      return new PreparedStatementWrapper(this, rconn.prepareStatement(sql,
+            columnIndexes));
     } catch (SQLException ex) {
       exceptionOccurred(ex);
       throw ex;
@@ -465,22 +419,9 @@ public class ConnectionWrapper implements java.sql.Connection {
                                    throws SQLException
   {
     try {
-      PreparedStatementWrapper pStmt;
       check_conn();
-      StringBuffer tmpBuf = new StringBuffer(sql.length()+16);
-      tmpBuf.append('@');
-      if (columnNames != null) {
-        for(int i = 0; i < columnNames.length; i++)
-          tmpBuf.append(columnNames[i]);
-      }
-      tmpBuf.append('@'); tmpBuf.append('#');
-      tmpBuf.append(sql);
-      String stmtKey = tmpBuf.toString();
-      if ((pStmt = pStmtPool.lookup(stmtKey)) != null)
-         return pStmt;
-      else
-         return new PreparedStatementWrapper(this, rconn.prepareStatement(sql,
-            columnNames), stmtKey);
+      return new PreparedStatementWrapper(this, rconn.prepareStatement(sql,
+            columnNames));
     } catch (SQLException ex) {
       exceptionOccurred(ex);
       throw ex;
@@ -644,11 +585,12 @@ public class ConnectionWrapper implements java.sql.Connection {
       return;
     if (r_XAResource != null)
       r_XAResource.reset_XA();
+    r_XAResource = null;
   }
-  protected synchronized LinkedList<Object> reset()
+  protected synchronized void reset()
   {
     if (rconn == null)
-      return null;
+      return;
     reset_XA();
     try {
       rconn.rollback();
@@ -673,11 +615,7 @@ public class ConnectionWrapper implements java.sql.Connection {
     try {
       rconn.setTypeMap(null);
     } catch (SQLException e) {}
-    return pStmtPool.reset();
-  }
-  protected void clearStmtsCache() {
-    pStmtPool.closeAll();
-    close_objs();
+    rconn = null;
   }
   protected void exceptionOccurred(SQLException ex) {
       if (pconn != null && VirtuosoConnection.isCriticalError(ex)) {
@@ -697,98 +635,7 @@ public class ConnectionWrapper implements java.sql.Connection {
   }
   private void check_conn() throws SQLException
   {
-    if (rconn == null)
+    if (isClosed || rconn == null)
         throw new VirtuosoException("The connection is already closed.",VirtuosoException.DISCONNECTED);
-  }
-  protected class StmtCache {
-    private LinkedList<Object> unUsed = null;
-    private HashMap<Object,Object> in_Use = new HashMap<Object,Object>(32);
-    private int cacheSize = 0;
-    private ConnectionWrapper connWrapper;
-    protected StmtCache(ConnectionWrapper _connWrapper, LinkedList<Object> pooledStmts) {
-      connWrapper = _connWrapper;
-      if (pooledStmts != null) {
-        unUsed = pooledStmts;
-        attach_stmts(unUsed);
-      } else {
-        unUsed = new LinkedList<Object>();
-      }
-    }
-    private PreparedStatementWrapper lookup(String stmtKey) {
-      PreparedStatementWrapper pStmt;
-      int hashKey = stmtKey.hashCode();
-      synchronized(this) {
-        for(Iterator iterator = unUsed.iterator(); iterator.hasNext(); ) {
-          pStmt = (PreparedStatementWrapper)iterator.next();
-          if (pStmt.hashStmtKey == hashKey && pStmt.stmtKey.equals(stmtKey)) {
-              iterator.remove();
-              return pStmt;
-          }
-        }
-      }
-      return null;
-    }
-    protected synchronized void addToUsed(PreparedStatementWrapper pStmt) {
-      in_Use.put(pStmt, pStmt);
-      cacheSize++;
-    }
-    protected void reuse(PreparedStatementWrapper pStmt) throws SQLException {
-      boolean reUsed = true;
-      PreparedStatementWrapper pooledStmt;
-      synchronized(this) {
-        in_Use.remove(pStmt);
-        cacheSize--;
-        if (maxStatements > 0) {
-           unUsed.addFirst(pStmt.reuse());
-           cacheSize++;
-           if (unUsed.size() > maxStatements) {
-              unUsed.removeLast();
-              cacheSize--;
-           }
-        } else {
-          reUsed = false;
-        }
-      }
-      if ( !reUsed)
-        pStmt.closeAll();
-    }
-   @SuppressWarnings("unchecked")
-   private synchronized LinkedList<Object> reset() {
-      PreparedStatementWrapper pStmt;
-      if (maxStatements > 0) {
-        for(ListIterator i = unUsed.listIterator(); i.hasPrevious() && unUsed.size() > maxStatements; ) {
-          pStmt = (PreparedStatementWrapper)i.previous();
-          i.remove();
-          pStmt.closeAll();
-        }
-      }
-      for (Iterator i = in_Use.keySet().iterator(); i.hasNext(); )
-        ((PreparedStatementWrapper)(i.next())).closeAll();
-      in_Use.clear();
-      LinkedList<Object> retVal = (LinkedList<Object>)(unUsed.clone());
-      unUsed.clear();
-      detach_stmts(retVal);
-      return retVal;
-    }
-    private synchronized void closeAll() {
-      for(Iterator i = unUsed.iterator(); i.hasNext(); )
-        ((PreparedStatementWrapper)(i.next())).closeAll();
-      unUsed.clear();
-      for (Iterator i = in_Use.keySet().iterator(); i.hasNext(); )
-        ((PreparedStatementWrapper)(i.next())).closeAll();
-      in_Use.clear();
-    }
-    private void detach_stmts(LinkedList pooledStmts) {
-      for (Iterator i = pooledStmts.iterator(); i.hasNext(); )
-        try {
-          ((PreparedStatementWrapper)(i.next())).wconn = null;
-        } catch(Exception e) { }
-    }
-    private void attach_stmts(LinkedList pooledStmts) {
-      for (Iterator i = pooledStmts.iterator(); i.hasNext(); )
-        try {
-          ((PreparedStatementWrapper)(i.next())).wconn = connWrapper;
-        } catch(Exception e) { }
-    }
   }
 }

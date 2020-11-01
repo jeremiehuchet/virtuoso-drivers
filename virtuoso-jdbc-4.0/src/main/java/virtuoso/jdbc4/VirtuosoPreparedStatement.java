@@ -11,6 +11,7 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
 {
    protected String sql;
    private static final int _EXECUTE_FAILED = Statement.EXECUTE_FAILED;
+   protected VirtuosoResultSet ps_vresultSet;
    VirtuosoPreparedStatement(VirtuosoConnection connection, String sql) throws VirtuosoException
    {
       this (connection,sql,VirtuosoResultSet.TYPE_FORWARD_ONLY,VirtuosoResultSet.CONCUR_READ_ONLY);
@@ -18,6 +19,7 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
    VirtuosoPreparedStatement(VirtuosoConnection connection, String sql, int type, int concurrency) throws VirtuosoException
    {
       super(connection,type,concurrency);
+      sparql_executed = sql.trim().regionMatches(true, 0, "sparql", 0, 6);
       synchronized (connection)
  {
    try
@@ -25,12 +27,13 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
        this.sql = sql;
        parse_sql();
        Object[] args = new Object[4];
-       args[0] = (statid == null) ? statid = new String("s" + connection.hashCode() + (req_no++)) : statid;
+       args[0] = (statid == null) ? statid = new String("ps" + connection.hashCode() + (req_no++)) : statid;
        args[1] = connection.escapeSQL(sql);
        args[2] = new Long(0);
        args[3] = getStmtOpts();
        future = connection.getFuture(VirtuosoFuture.prepare,args, this.rpc_timeout);
-       vresultSet = new VirtuosoResultSet(this,metaData);
+       ps_vresultSet = vresultSet = new VirtuosoResultSet(this,metaData, true);
+       result_opened = true;
               clearParameters();
      }
    catch(IOException e)
@@ -66,6 +69,11 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
        {
   Object[] args = new Object[6];
   openlink.util.Vector vect = new openlink.util.Vector(1);
+         if (future != null)
+           {
+             connection.removeFuture(future);
+             future = null;
+           }
   args[0] = statid;
   args[2] = (cursorName == null) ? args[0] : cursorName;
   args[1] = null;
@@ -76,7 +84,11 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
       vect.addElement(objparams);
       args[5] = getStmtOpts();
       future = connection.getFuture(VirtuosoFuture.exec,args, this.rpc_timeout);
-      vresultSet.getMoreResults();
+             ps_vresultSet.isLastResult = false;
+      ps_vresultSet.getMoreResults(false);
+             ps_vresultSet.stmt_n_rows_to_get = this.prefetch;
+             vresultSet = ps_vresultSet;
+      result_opened = true;
     }
   catch(IOException e)
     {
@@ -122,13 +134,19 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
   args[4] = null;
   try
     {
+             if (future != null)
+               {
+          connection.removeFuture(future);
+          future = null;
+               }
       args[5] = getStmtOpts();
       future = connection.getFuture(VirtuosoFuture.exec,args, this.rpc_timeout);
+             vresultSet.isLastResult = false;
       for (inx = 0; inx < size; inx++)
       {
    vresultSet.setUpdateCount (0);
-   vresultSet.getMoreResults ();
-   res[inx] = vresultSet.getUpdateCount();
+   vresultSet.getMoreResults (false);
+   res[inx] = SUCCESS_NO_INFO;
       }
     }
   catch(IOException e)
@@ -154,6 +172,10 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
          return vresultSet.getMetaData();
       throw new VirtuosoException("Prepared statement closed",VirtuosoException.CLOSED);
    }
+   public void finalize() throws Throwable
+   {
+      close();
+   }
    public void close() throws VirtuosoException
    {
     if (isCached) {
@@ -165,20 +187,24 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
       }
       return;
     }
+     if(close_flag)
+       return;
      synchronized (connection)
        {
   try
     {
+      close_flag = true;
       if(statid == null)
         return;
       cancel();
       Object[] args = new Object[2];
       args[0] = statid;
-      args[1] = new Long(VirtuosoTypes.STAT_CLOSE);
+      args[1] = new Long(VirtuosoTypes.STAT_DROP);
       future = connection.getFuture(VirtuosoFuture.close,args, this.rpc_timeout);
       future.nextResult();
       connection.removeFuture(future);
       future = null;
+      result_opened = false;
     }
   catch(IOException e)
     {
@@ -412,108 +438,12 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
    {
       setObject(parameterIndex,x,targetSqlType, 0);
    }
-   protected Object mapJavaTypeToSqlType (Object x, int targetSqlType, int scale) throws VirtuosoException
-   {
-     if (x == null)
-       return x;
-     if (x instanceof java.lang.Boolean)
-       x = new Integer (((Boolean)x).booleanValue() ? 1 : 0);
-     switch (targetSqlType)
-       {
-   case Types.CHAR:
-   case Types.VARCHAR:
-       if (x instanceof java.util.Date || x instanceof java.lang.String)
-  return x;
-       else
-  return x.toString();
-   case Types.LONGVARCHAR:
-              if (x instanceof java.sql.Clob || x instanceof java.sql.Blob || x instanceof java.lang.String)
-                return x;
-              else
-  return x.toString();
-   case Types.DATE:
-   case Types.TIME:
-   case Types.TIMESTAMP:
-       if (x instanceof java.util.Date || x instanceof java.lang.String)
-  return x;
-              break;
-          case Types.NUMERIC:
-          case Types.DECIMAL:
-              {
-                java.math.BigDecimal bd = null;
-  if (x instanceof java.math.BigDecimal)
-    bd = (java.math.BigDecimal) x;
-                else if (x instanceof java.lang.String)
-    bd = new java.math.BigDecimal ((String) x);
-  else if (x instanceof java.lang.Number)
-    bd = new java.math.BigDecimal (x.toString());
-                if (bd != null)
-    return bd.setScale (scale);
-              }
-       break;
-          case Types.BIGINT:
-              if (x instanceof java.math.BigDecimal || x instanceof java.lang.String)
-                return new Long(x.toString());
-              else if (x instanceof java.lang.Number)
-                return new Long(((Number)x).longValue());
-       break;
-          case Types.FLOAT:
-          case Types.DOUBLE:
-              if (x instanceof java.lang.Double)
-                return x;
-              else if (x instanceof java.lang.Number)
-                return new Double (((Number)x).doubleValue());
-              else if (x instanceof java.lang.String)
-                return new Double ((String) x);
-       break;
-          case Types.INTEGER:
-              if (x instanceof java.lang.Integer)
-                return x;
-              else if (x instanceof java.lang.Number)
-                return new Integer (((Number)x).intValue());
-              else if (x instanceof java.lang.String)
-                return new Integer ((String) x);
-       break;
-          case Types.REAL:
-              if (x instanceof java.lang.Float)
-                return x;
-              else if (x instanceof java.lang.Number)
-                return new Float (((Number)x).floatValue());
-              else if (x instanceof java.lang.String)
-                return new Float ((String) x);
-       break;
-          case Types.SMALLINT:
-          case Types.TINYINT:
-          case Types.BIT:
-          case Types.BOOLEAN:
-              if (x instanceof java.lang.Short)
-                return x;
-              else if (x instanceof java.lang.String)
-                return new Short ((String) x);
-              else if (x instanceof java.lang.Number)
-                return new Short (((Number)x).shortValue());
-       break;
-   case Types.ARRAY:
-   case Types.DATALINK:
-      case Types.ROWID:
-          case Types.DISTINCT:
-   case Types.REF:
-       throw new VirtuosoException ("Type not supported", VirtuosoException.NOTIMPLEMENTED);
-          case Types.VARBINARY:
-              if (x instanceof byte[])
-                return x;
-              break;
-          case Types.LONGVARBINARY:
-              if (x instanceof java.sql.Blob || x instanceof byte [])
-                return x;
-              break;
-   default:
-       return x;
-       }
-     throw new VirtuosoException ("Invalid value specified", VirtuosoException.BADPARAM);
-   }
    public void setObject(int parameterIndex, Object x, int targetSqlType, int scale) throws VirtuosoException
    {
+      if(x == null) {
+          this.setNull(parameterIndex, Types.OTHER);
+          return;
+      }
       if(parameterIndex < 1 || parameterIndex > parameters.capacity())
          throw new VirtuosoException("Index " + parameterIndex + " is not 1<n<" + parameters.capacity(),VirtuosoException.BADPARAM);
       if (x instanceof VirtuosoExplicitString)
@@ -527,11 +457,20 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
          ((VirtuosoBlob)_obj).setObject(x);
          return;
       }
-      if(x == null) this.setNull(parameterIndex, Types.OTHER);
-      x = mapJavaTypeToSqlType (x, targetSqlType, scale);
+      x = VirtuosoTypes.mapJavaTypeToSqlType (x, targetSqlType, scale);
       if (x instanceof java.io.Serializable)
  {
-   objparams.setElementAt (x, parameterIndex - 1);
+   if (x instanceof String && parameters != null
+        && parameters.elementAt(parameterIndex - 1) instanceof openlink.util.Vector)
+     {
+       openlink.util.Vector pd = (openlink.util.Vector)parameters.elementAt(parameterIndex - 1);
+       int dtp = ((Number)pd.elementAt (0)).intValue();
+       VirtuosoExplicitString ret;
+       ret = new VirtuosoExplicitString ((String)x, dtp, connection);
+       objparams.setElementAt (ret, parameterIndex - 1);
+     }
+   else
+     objparams.setElementAt (x, parameterIndex - 1);
  }
       else
  throw new VirtuosoException ("Object " + x.getClass().getName() + " not serializable", "22023",
@@ -543,39 +482,38 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
          throw new VirtuosoException("Index " + parameterIndex + " is not 1<n<" + parameters.capacity(),VirtuosoException.BADPARAM);
       objparams.setElementAt(new Short(x),parameterIndex - 1);
    }
-   public void setString(int parameterIndex, String x1) throws VirtuosoException
+   public void setString(int parameterIndex, String x) throws VirtuosoException
    {
       if(parameterIndex < 1 || parameterIndex > parameters.capacity())
          throw new VirtuosoException("Index " +
       parameterIndex + " is not 1<n<" + parameters.capacity(),VirtuosoException.BADPARAM);
-      if(x1 == null)
+      if(x == null)
  this.setNull(parameterIndex, Types.VARCHAR);
       else
  {
-   String x;
-     x = x1;
    if (parameters != null && parameters.elementAt(parameterIndex - 1) instanceof openlink.util.Vector)
      {
        openlink.util.Vector pd = (openlink.util.Vector)parameters.elementAt(parameterIndex - 1);
        int dtp = ((Number)pd.elementAt (0)).intValue();
        VirtuosoExplicitString ret;
-       ret = new
-    VirtuosoExplicitString (x, dtp, connection);
+       ret = new VirtuosoExplicitString (x, dtp, connection);
        objparams.setElementAt (ret, parameterIndex - 1);
      }
    else
-     objparams.setElementAt(x,parameterIndex - 1);
+     {
+       objparams.setElementAt(x,parameterIndex - 1);
+     }
  }
    }
-   protected void setString(int parameterIndex, VirtuosoExplicitString x1) throws VirtuosoException
+   protected void setString(int parameterIndex, VirtuosoExplicitString x) throws VirtuosoException
    {
      if(parameterIndex < 1 || parameterIndex > parameters.capacity())
        throw new VirtuosoException("Index " +
     parameterIndex + " is not 1<n<" + parameters.capacity(),VirtuosoException.BADPARAM);
-     if(x1 == null)
+     if(x == null)
        this.setNull(parameterIndex, Types.VARCHAR);
      else
-        objparams.setElementAt(x1, parameterIndex - 1);
+        objparams.setElementAt(x, parameterIndex - 1);
    }
    public void setTime(int parameterIndex, java.sql.Time x) throws VirtuosoException
    {
@@ -614,7 +552,7 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
       int[] result = new int[batch.size()];
       boolean error = false;
       if (this instanceof VirtuosoCallableStatement && ((VirtuosoCallableStatement)this).hasOut())
- throwBatchUpdateException (result, "Batch can't execute calls with out params", 0);
+ throwBatchUpdateException (result, "Batch cannot execute calls with out params", 0);
       try
  {
          if (vresultSet.kindop()==VirtuosoTypes.QT_SELECT)
@@ -635,8 +573,13 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
    {
       if(i < 1 || i > parameters.capacity())
          throw new VirtuosoException("Index " + i + " is not 1<n<" + parameters.capacity(),VirtuosoException.BADPARAM);
-      if(x == null) this.setNull(i, Types.ARRAY);
-      else objparams.setElementAt(x,i - 1);
+      if(x == null){
+          this.setNull(i, Types.ARRAY);
+      } else if (x instanceof VirtuosoArray) {
+          objparams.setElementAt(((VirtuosoArray)x).data, i - 1);
+      } else {
+          objparams.setElementAt(x,i - 1);
+      }
    }
    public void setBlob(int i, Blob x) throws VirtuosoException
    {
@@ -735,8 +678,7 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
   {
     if(cal != null)
       {
-        cal.setTime((java.util.Date)x);
-        x = new java.sql.Date (cal.getTime().getTime());
+        x = new java.sql.Date (VirtuosoTypes.timeFromCal(x, cal));
       }
     objparams.setElementAt(x,parameterIndex - 1);
   }
@@ -751,8 +693,7 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
   {
     if(cal != null)
       {
-        cal.setTime((java.util.Date)x);
-        x = new java.sql.Time (cal.getTime().getTime());
+        x = new java.sql.Time (VirtuosoTypes.timeFromCal(x, cal));
       }
     objparams.setElementAt(x,parameterIndex - 1);
   }
@@ -768,8 +709,7 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
     if(cal != null)
       {
         int nanos = x.getNanos();
-        cal.setTime((java.util.Date)x);
-        x = new java.sql.Timestamp (cal.getTime().getTime());
+        x = new java.sql.Timestamp(VirtuosoTypes.timeFromCal(x, cal));
                x.setNanos (nanos);
       }
     objparams.setElementAt(x,parameterIndex - 1);
@@ -785,7 +725,7 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
      }
   public void setRowId(int parameterIndex, RowId x) throws SQLException
   {
-    throw new VirtuosoFNSException ("Method  setRowId(parameterIndex, x)  isn't supported", VirtuosoException.NOTIMPLEMENTED);
+    throw new VirtuosoFNSException ("Method  setRowId(parameterIndex, x)  is not supported", VirtuosoException.NOTIMPLEMENTED);
   }
   public synchronized void setNString(int parameterIndex, String value) throws SQLException
   {
@@ -824,7 +764,7 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
   }
   public synchronized void setSQLXML(int parameterIndex, SQLXML xmlObject) throws SQLException
   {
-    throw new VirtuosoFNSException ("Method  setSQLXML(parameterIndex, xmlObject)  isn't supported", VirtuosoException.NOTIMPLEMENTED);
+    throw new VirtuosoFNSException ("Method  setSQLXML(parameterIndex, xmlObject)  is not supported", VirtuosoException.NOTIMPLEMENTED);
   }
   public void setAsciiStream(int parameterIndex, java.io.InputStream x, long length)
      throws SQLException
@@ -844,36 +784,36 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
   public void setAsciiStream(int parameterIndex, java.io.InputStream x)
      throws SQLException
   {
-    throw new VirtuosoFNSException ("Method  setAsciiStream(parameterIndex, x)  isn't supported", VirtuosoException.NOTIMPLEMENTED);
+    throw new VirtuosoFNSException ("Method  setAsciiStream(parameterIndex, x)  is not supported", VirtuosoException.NOTIMPLEMENTED);
   }
   public void setBinaryStream(int parameterIndex, java.io.InputStream x)
     throws SQLException
   {
-    throw new VirtuosoFNSException ("Method  setAsciiStream(parameterIndex, x)  isn't supported", VirtuosoException.NOTIMPLEMENTED);
+    throw new VirtuosoFNSException ("Method  setAsciiStream(parameterIndex, x)  is not supported", VirtuosoException.NOTIMPLEMENTED);
   }
   public void setCharacterStream(int parameterIndex,
             java.io.Reader reader) throws SQLException
   {
-    throw new VirtuosoFNSException ("Method  setCharacterStream(parameterIndex, reader)  isn't supported", VirtuosoException.NOTIMPLEMENTED);
+    throw new VirtuosoFNSException ("Method  setCharacterStream(parameterIndex, reader)  is not supported", VirtuosoException.NOTIMPLEMENTED);
   }
   public void setNCharacterStream(int parameterIndex, Reader value) throws SQLException
   {
-    throw new VirtuosoFNSException ("Method  setNCharacterStream(parameterIndex, value)  isn't supported", VirtuosoException.NOTIMPLEMENTED);
+    throw new VirtuosoFNSException ("Method  setNCharacterStream(parameterIndex, value)  is not supported", VirtuosoException.NOTIMPLEMENTED);
   }
   public void setClob(int parameterIndex, Reader reader)
        throws SQLException
   {
-    throw new VirtuosoFNSException ("Method  setClob(parameterIndex, reader)  isn't supported", VirtuosoException.NOTIMPLEMENTED);
+    throw new VirtuosoFNSException ("Method  setClob(parameterIndex, reader)  is not supported", VirtuosoException.NOTIMPLEMENTED);
   }
   public void setBlob(int parameterIndex, InputStream inputStream)
         throws SQLException
   {
-    throw new VirtuosoFNSException ("Method  setBlob(parameterIndex, inputStream)  isn't supported", VirtuosoException.NOTIMPLEMENTED);
+    throw new VirtuosoFNSException ("Method  setBlob(parameterIndex, inputStream)  is not supported", VirtuosoException.NOTIMPLEMENTED);
   }
   public void setNClob(int parameterIndex, Reader reader)
        throws SQLException
   {
-    throw new VirtuosoFNSException ("Method  setNClob(parameterIndex, reader)  isn't supported", VirtuosoException.NOTIMPLEMENTED);
+    throw new VirtuosoFNSException ("Method  setNClob(parameterIndex, reader)  is not supported", VirtuosoException.NOTIMPLEMENTED);
   }
   protected synchronized void setClosed(boolean flag)
   {

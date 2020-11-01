@@ -15,11 +15,13 @@ public class Driver implements java.sql.Driver
       }
    }
    protected static final int major = 3;
-   protected static final int minor = 45;
+   protected static final int minor = 116;
    private String host = "localhost";
    private String port = "1111";
    private String user, password, database, charset, pwdclear;
    private Integer timeout, log_enable;
+   private String keystore_cert, keystore_pass, keystore_path;
+   private String ssl_provider;
    private Integer fbs, sendbs, recvbs;
    private final String VirtPrefix = "jdbc:virtuoso://";
    public Driver() throws SQLException
@@ -34,13 +36,12 @@ public class Driver implements java.sql.Driver
       System.err.println ("RPC logfile=" + log_file);
       try
         {
-   VirtuosoFuture.rpc_log = new java.io.PrintStream (
-       new java.io.BufferedOutputStream (
-         new java.io.FileOutputStream (log_file), 4096));
+          VirtuosoFuture.rpc_log = new java.io.PrintWriter(
+               new java.io.FileOutputStream(log_file), true);
         }
       catch (Exception e)
         {
-   VirtuosoFuture.rpc_log = System.out;
+   VirtuosoFuture.rpc_log = new java.io.PrintWriter(System.out, true);
         }
     }
        }
@@ -144,18 +145,24 @@ public class Driver implements java.sql.Driver
       else
         props.put(attr.toLowerCase(), val);
     }
+    char fsep = System.getProperty("file.separator").charAt(0);
     val = props.getProperty("kpath");
     if (val != null) {
-      char fsep = System.getProperty("file.separator").charAt(0);
       if (fsep != '\\') {
         val = val.replace('\\', fsep);
         props.put("kpath", val);
       }
     }
+    val = props.getProperty("ts");
+    if (val != null) {
+      if (fsep != '\\') {
+        val = val.replace('\\', fsep);
+        props.put("ts", val);
+      }
+    }
     val = props.getProperty("ssl");
     if (val != null) {
-      if (props.getProperty("cert")==null)
-        props.setProperty("cert", "");
+        props.setProperty("ssl", "1");
     }
     val = props.getProperty("pwdtype");
     if (val != null)
@@ -166,88 +173,183 @@ public class Driver implements java.sql.Driver
     val = props.getProperty("pwd");
     if (val != null)
       props.setProperty("password", val);
-    val = props.getProperty("cert");
+    val = props.getProperty("ts");
     if (val != null)
-      props.setProperty("certificate", val);
-    val = props.getProperty("pass");
+      props.setProperty("truststorepath", val);
+    val = props.getProperty("tspass");
     if (val != null)
-      props.setProperty("keystorepass", val);
+      props.setProperty("truststorepass", val);
     val = props.getProperty("kpath");
     if (val != null)
       props.setProperty("keystorepath", val);
+    val = props.getProperty("pass");
+    if (val != null)
+      props.setProperty("keystorepass", val);
+    val = props.getProperty("kpass");
+    if (val != null)
+      props.setProperty("keystorepass", val);
     return props;
    }
    public DriverPropertyInfo[] getPropertyInfo(String url, Properties info) throws VirtuosoException
    {
+      Vector pinfo = new Vector();
+      DriverPropertyInfo pr;
       if(acceptsURL(url))
       {
-         DriverPropertyInfo[] pinfo = new DriverPropertyInfo[7];
          if(info.get("user") == null)
          {
-            pinfo[0] = new DriverPropertyInfo("user",null);
-            pinfo[0].required = true;
+            pr = new DriverPropertyInfo("user",null);
+            pr.required = true;
+            pinfo.add(pr);
          }
          if(info.get("password") == null)
          {
-            pinfo[1] = new DriverPropertyInfo("password",null);
-            pinfo[1].required = true;
+            pr = new DriverPropertyInfo("password",null);
+            pr.required = true;
+            pinfo.add(pr);
          }
          if(info.get("database") == null)
          {
-            pinfo[2] = new DriverPropertyInfo("database",null);
-            pinfo[2].required = false;
+            pr = new DriverPropertyInfo("database",null);
+            pr.required = false;
+            pinfo.add(pr);
          }
-         return pinfo;
+         if(info.get("cert") == null)
+         {
+            pr = new DriverPropertyInfo("cert",null);
+            pr.required = false;
+            pinfo.add(pr);
+         }
+         if(info.get("keystorepass") == null)
+         {
+            pr = new DriverPropertyInfo("keystorepass",null);
+            pr.required = false;
+            pinfo.add(pr);
+         }
+         if(info.get("keystorepath") == null)
+         {
+            pr = new DriverPropertyInfo("keystorepath",null);
+            pr.required = false;
+            pinfo.add(pr);
+         }
+         if(info.get("provider") == null)
+         {
+            pr = new DriverPropertyInfo("provider",null);
+            pr.required = false;
+            pinfo.add(pr);
+         }
+         if(info.get("truststorepass") == null)
+         {
+            pr = new DriverPropertyInfo("truststorepass",null);
+            pr.required = false;
+            pinfo.add(pr);
+         }
+         if(info.get("truststorepath") == null)
+         {
+            pr = new DriverPropertyInfo("truststorepath",null);
+            pr.required = false;
+            pinfo.add(pr);
+         }
+         DriverPropertyInfo drv_info[] = new DriverPropertyInfo[pinfo.size()];
+         pinfo.copyInto(drv_info);
+         return drv_info;
       }
-      DriverPropertyInfo[] pinfo = new DriverPropertyInfo[8];
-      pinfo[0] = new DriverPropertyInfo("url",url);
-      pinfo[0].required = true;
+      pr = new DriverPropertyInfo("url",url);
+      pr.required = true;
+      pinfo.add(pr);
       if(info.get("user") == null)
       {
-         pinfo[1] = new DriverPropertyInfo("user",null);
-         pinfo[1].required = true;
+         pr = new DriverPropertyInfo("user",null);
+         pr.required = true;
+         pinfo.add(pr);
       }
       if(info.get("password") == null)
       {
-         pinfo[2] = new DriverPropertyInfo("password",null);
-         pinfo[2].required = true;
+         pr = new DriverPropertyInfo("password",null);
+         pr.required = true;
+         pinfo.add(pr);
       }
       if(info.get("database") == null)
       {
-         pinfo[3] = new DriverPropertyInfo("database",null);
-         pinfo[3].required = false;
+         pr = new DriverPropertyInfo("database",null);
+         pr.required = false;
+         pinfo.add(pr);
       }
       if(info.get("fbs") == null)
       {
-         pinfo[3] = new DriverPropertyInfo("fbs",null);
-         pinfo[3].required = false;
+         pr = new DriverPropertyInfo("fbs",null);
+         pr.required = false;
+         pinfo.add(pr);
       }
       if(info.get("sendbs") == null)
       {
-         pinfo[3] = new DriverPropertyInfo("sendbs",null);
-         pinfo[3].required = false;
+         pr = new DriverPropertyInfo("sendbs",null);
+         pr.required = false;
+         pinfo.add(pr);
       }
       if(info.get("recvbs") == null)
       {
-         pinfo[3] = new DriverPropertyInfo("recvbs",null);
-         pinfo[3].required = false;
+         pr = new DriverPropertyInfo("recvbs",null);
+         pr.required = false;
+         pinfo.add(pr);
       }
       if(info.get("roundrobin") == null)
       {
-         pinfo[3] = new DriverPropertyInfo("roundrobin",null);
-         pinfo[3].required = false;
+         pr = new DriverPropertyInfo("roundrobin",null);
+         pr.required = false;
+         pinfo.add(pr);
+      }
+      if(info.get("cert") == null)
+      {
+         pr = new DriverPropertyInfo("cert",null);
+         pr.required = false;
+         pinfo.add(pr);
+      }
+      if(info.get("keystorepass") == null)
+      {
+         pr = new DriverPropertyInfo("keystorepass",null);
+         pr.required = false;
+         pinfo.add(pr);
+      }
+      if(info.get("keystorepath") == null)
+      {
+         pr = new DriverPropertyInfo("keystorepath",null);
+         pr.required = false;
+         pinfo.add(pr);
+      }
+      if(info.get("provider") == null)
+      {
+         pr = new DriverPropertyInfo("provider",null);
+         pr.required = false;
+         pinfo.add(pr);
+      }
+      if(info.get("truststorepass") == null)
+      {
+         pr = new DriverPropertyInfo("truststorepass",null);
+         pr.required = false;
+         pinfo.add(pr);
+      }
+      if(info.get("truststorepath") == null)
+      {
+         pr = new DriverPropertyInfo("truststorepath",null);
+         pr.required = false;
+         pinfo.add(pr);
       }
       if(info.get("usepstmtpool") == null)
       {
-         pinfo[3] = new DriverPropertyInfo("usepstmtpool",null);
-         pinfo[3].required = false;
+         pr = new DriverPropertyInfo("usepstmtpool",null);
+         pr.required = false;
+         pinfo.add(pr);
       }
       if(info.get("pstmtpoolsize") == null)
       {
-         pinfo[3] = new DriverPropertyInfo("pstmtpoolsize",null);
-         pinfo[3].required = false;
+         pr = new DriverPropertyInfo("pstmtpoolsize",null);
+         pr.required = false;
+         pinfo.add(pr);
       }
-      return pinfo;
+      DriverPropertyInfo drv_info[] = new DriverPropertyInfo[pinfo.size()];
+      pinfo.copyInto(drv_info);
+      return drv_info;
    }
    public int getMajorVersion()
    {
@@ -263,6 +365,6 @@ public class Driver implements java.sql.Driver
    }
    public static void main(String args[])
    {
-      System.out.println("OpenLink Virtuoso(TM) Driver for JDBC(TM) Version " + "4.x" + " [Build " + major + "." + minor + "]");
+      System.out.println("OpenLink Virtuoso(TM) Driver with SSL support for JDBC(TM) Version " + 4.0 + " [Build " + major + "." + minor + "]");
    }
 }
