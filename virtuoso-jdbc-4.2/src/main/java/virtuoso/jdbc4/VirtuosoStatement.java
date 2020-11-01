@@ -23,7 +23,7 @@ public class VirtuosoStatement implements Statement
    protected boolean result_opened = false;
    protected boolean sparql_executed = false;
    protected static int req_no;
-   protected VirtuosoResultSet vresultSet;
+   protected volatile VirtuosoResultSet vresultSet;
    protected VirtuosoFuture future;
    protected VirtuosoResultSetMetaData metaData;
    protected boolean isCached = false;
@@ -214,25 +214,28 @@ public class VirtuosoStatement implements Statement
    }
    public void close() throws VirtuosoException
    {
+     if(close_flag)
+       return;
+     connection.removeStmtFromClose(this);
      close_rs(true, false);
    }
    public boolean execute(String sql) throws VirtuosoException
    {
       exec_type = VirtuosoTypes.QT_UNKNOWN;
-      vresultSet = sendQuery(sql);
-      return (vresultSet.kindop() != VirtuosoTypes.QT_UPDATE);
+      VirtuosoResultSet rs = vresultSet = sendQuery(sql);
+      return (rs.kindop() != VirtuosoTypes.QT_UPDATE);
    }
    public ResultSet executeQuery(String sql) throws VirtuosoException
    {
       exec_type = VirtuosoTypes.QT_SELECT;
-      vresultSet = sendQuery(sql);
-      return vresultSet;
+      VirtuosoResultSet rs = vresultSet = sendQuery(sql);
+      return rs;
    }
    public int executeUpdate(String sql) throws VirtuosoException
    {
       exec_type = VirtuosoTypes.QT_UPDATE;
-      vresultSet = sendQuery(sql);
-      return vresultSet.getUpdateCount();
+      VirtuosoResultSet rs = vresultSet = sendQuery(sql);
+      return rs.getUpdateCount();
    }
    public int getMaxFieldSize() throws VirtuosoException
    {

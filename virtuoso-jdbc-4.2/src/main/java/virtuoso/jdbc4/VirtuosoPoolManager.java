@@ -1,15 +1,18 @@
 package virtuoso.jdbc4;
 import java.util.*;
-class VirtuosoPoolManager {
+import java.util.concurrent.atomic.*;
+public class VirtuosoPoolManager {
   private static WeakHashMap<Object,Object> connPools = new WeakHashMap<Object,Object>(50);
   private static VirtuosoPoolManager poolMgr = null;
   private static Object lock = new Object();
   private static ThreadGroup thrGroup = null;
   private static Thread poolChecker = null;
   private static Thread propertyChecker = null;
-  protected static VirtuosoPoolManager getInstance() {
+  private static AtomicBoolean isRun = new AtomicBoolean(false);
+  public static VirtuosoPoolManager getInstance() {
     synchronized(lock) {
       if (poolMgr == null) {
+        isRun.set(true);
         poolMgr = new VirtuosoPoolManager();
         thrGroup = new ThreadGroup("Virtuoso Pool Manager");
         thrGroup.setDaemon(true);
@@ -21,6 +24,8 @@ class VirtuosoPoolManager {
               try {
                 sleep(500L);
               } catch (InterruptedException e) { }
+              if (isRun.get() != true)
+                return;
               synchronized(lock) {
                   poolTmp = connPools.keySet().toArray();
               }
@@ -44,6 +49,8 @@ class VirtuosoPoolManager {
               try {
                 sleep(500L);
               } catch (InterruptedException e) { }
+              if (isRun.get() != true)
+                return;
               synchronized(lock) {
                   poolTmp = connPools.keySet().toArray();
               }
@@ -64,11 +71,29 @@ class VirtuosoPoolManager {
     return poolMgr;
   }
   protected void addPool(VirtuosoConnectionPoolDataSource pool) {
+    if (isRun.get() != true)
+      return;
     synchronized(lock) {
      connPools.put(pool, null);
     }
   }
-  protected VirtuosoPoolStatistic[] getAll_statistics() {
+  public void shutdown() {
+    if (isRun.get() != true)
+      return;
+    synchronized(lock) {
+      isRun.set(false);
+      VirtuosoConnectionPoolDataSource pds;
+      for(Iterator i = connPools.keySet().iterator(); i.hasNext(); ) {
+        pds = (VirtuosoConnectionPoolDataSource)i.next();
+        if (pds != null)
+          try {
+            pds.close();
+          } catch(Exception e) { }
+      }
+      connPools.clear();
+    }
+  }
+  public VirtuosoPoolStatistic[] getAll_statistics() {
    VirtuosoConnectionPoolDataSource[] poolTmp = (VirtuosoConnectionPoolDataSource[])(connPools.keySet().toArray(new VirtuosoConnectionPoolDataSource[0]));
    VirtuosoPoolStatistic[] retVal = new VirtuosoPoolStatistic[poolTmp.length];
    for(int i = 0; i < poolTmp.length; i++) {

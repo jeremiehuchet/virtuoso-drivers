@@ -10,9 +10,9 @@ echo "👨‍🏭 Generate up to date sources"
 nix-build --quiet virtuoso-java-sources.nix
 
 echo "Exporting some environment variables"
-old_rev=$(xmlstarlet sel -N 'x=http://maven.apache.org/POM/4.0.0' -t -v '/x:project/x:properties/x:openlink.virtuoso-opensource.gitrev' virtuoso-jdbc-4.2/pom.xml)
+old_rev=$(xmlstarlet sel -N 'x=http://maven.apache.org/POM/4.0.0' -t -v '/x:project/x:properties/x:openlink.virtuoso-opensource.gitrev' virtuoso-jdbc-4.3/pom.xml)
 new_rev=$(jq -r .rev virtuoso-github.json)
-old_build=$(xmlstarlet sel -N 'x=http://maven.apache.org/POM/4.0.0' -t -v '/x:project/x:version' virtuoso-jdbc-4.2/pom.xml | sed 's/^42\.//')
+old_build=$(xmlstarlet sel -N 'x=http://maven.apache.org/POM/4.0.0' -t -v '/x:project/x:version' virtuoso-jdbc-4.3/pom.xml | sed 's/^43\.//')
 new_build=$(cat result/build-version)
 
 cat - <<EOF >> $GITHUB_ENV
@@ -23,7 +23,7 @@ new_build=$new_build
 EOF
 
 echo "🎨 Override source files"
-for version in 4.0 4.1 4.2 ; do
+for version in 4.0 4.1 4.2 4.3 ; do
   # update gitrev and build version in pom file
   sed -i "s/$old_rev/$new_rev/g"     virtuoso-jdbc-$version/pom.xml
   sed -i "s/$old_build/$new_build/g" virtuoso-jdbc-$version/pom.xml

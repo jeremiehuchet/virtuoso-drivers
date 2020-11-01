@@ -19,4 +19,5 @@ in pkgs.mkShell {
   JDK6_HOME = dependencies.jdk6;
   JDK7_HOME = dependencies.jdk7;
   JDK8_HOME = dependencies.jdk8;
+  JDK9_HOME = dependencies.jdk9;
 }
