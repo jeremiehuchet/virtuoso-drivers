@@ -144,7 +144,7 @@ public class VirtuosoConnection implements Connection
       }
       user = (String)prop.get("user");
       if(user == null || user.equals(""))
-         user = "";
+         user = "anonymous";
       password = (String)prop.get("password");
       if (password == null)
          password = "";
@@ -380,7 +380,7 @@ public class VirtuosoConnection implements Connection
       if (result_future.size() > 2)
         {
    openlink.util.Vector caller_id_opts = (openlink.util.Vector)result_future.elementAt(2);
-   int pwd_clear_code = (int) cdef_param (caller_id_opts, "SQL_ENCRYPTION_ON_PASSWORD", 3);
+   int pwd_clear_code = (int) cdef_param (caller_id_opts, "SQL_ENCRYPTION_ON_PASSWORD", -1);
    switch (pwd_clear_code)
      {
        case 1: pwdclear = "cleartext"; break;

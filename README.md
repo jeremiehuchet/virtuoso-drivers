@@ -4,7 +4,7 @@ Maven repository distributing Openlink Virtuoso opensource Java libraries.
 
 | Module          | Latest version |
 | --------------- | -------------- |
-| virtuoso-jdbc   | [42.3.116](https://github.com/jeremiehuchet/virtuoso-drivers/releases/virtuoso-jdbc-3.116) |
+| virtuoso-jdbc   | [42.3.112](https://github.com/jeremiehuchet/virtuoso-drivers/releases/virtuoso-jdbc-3.112) |
 
 ## Getting started
 
@@ -28,7 +28,7 @@ And the dependency:
 <dependency>
     <groupId>com.openlink</groupId>
     <artifactId>virtuoso-jdbc</artifactId>
-    <version>42.3.116</version>
+    <version>42.3.112</version>
 </dependency>
 ```
 
@@ -48,7 +48,7 @@ And the dependency:
 
 ```groovy
 dependencies {
-    implementation "com.openlink:virtuoso-jdbc:42.3.116"
+    implementation "com.openlink:virtuoso-jdbc:42.3.112"
 }
 ```
 
@@ -61,13 +61,13 @@ I used a convention inspired by the [Postgresql JDBC driver](https://search.mave
 - `MINOR` is the driver implementation minor version number
 - `JRE` is optional and specified for old Java runtimes
 
-For instance, `41.3.116.jre7` is:
+For instance, `41.3.112.jre7` is:
 
 - a JDBC 4.1 driver
-- version 3.116
+- version 3.112
 - compatible with JRE 7+
 
-And `42.3.116` is the same but for latest JRE (8+).
+And `42.3.112` is the same but for latest JRE (8+).
 
 ## About
 
