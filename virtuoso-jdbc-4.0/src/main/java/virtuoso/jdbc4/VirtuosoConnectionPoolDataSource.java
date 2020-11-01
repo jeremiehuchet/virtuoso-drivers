@@ -15,35 +15,36 @@ import java.util.Iterator;
 import java.util.ListIterator;
 import java.util.List;
 import java.util.TreeSet;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
 import javax.sql.*;
 import javax.naming.*;
 public class VirtuosoConnectionPoolDataSource
     extends VirtuosoDataSource
     implements ConnectionPoolDataSource, ConnectionEventListener {
+    protected final static String n_initialPoolSize = "initialPoolSize";
     protected final static String n_minPoolSize = "minPoolSize";
     protected final static String n_maxPoolSize = "maxPoolSize";
-    protected final static String n_initialPoolSize = "initialPoolSize";
     protected final static String n_maxIdleTime = "maxIdleTime";
     protected final static String n_propertyCycle = "propertyCycle";
     protected final static String n_maxStatements = "maxStatements";
-    private int minPoolSize = 0;
-    private int maxPoolSize = 0;
-    private int initialPoolSize = 0;
-    private int maxIdleTime = 0;
-    private int propertyCycle = 0;
-    private int maxStatements = 0;
+    public int initialPoolSize = 0;
+    public volatile int minPoolSize = 0;
+    public volatile int maxPoolSize = 0;
+    public volatile int maxIdleTime = 0;
+    public volatile int propertyCycle = 0;
+    public volatile int maxStatements = 0;
     private ConnCache connPool;
-    private boolean isInitialized = false;
-    private boolean isClosed = false;
+    private volatile boolean isInitialized = false;
+    private volatile boolean isClosed = false;
+    private VirtuosoPoolStatistic stat;
     private Object initLock ;
     private TreeSet<Object> propQueue;
     private long propEnforceTime = 0;
-  public synchronized void finalize () throws Throwable {
-    close ();
-  }
   public VirtuosoConnectionPoolDataSource() {
     dataSourceName = "VirtuosoConnectionPoolDataSourceName";
     initLock = new Object();
+    stat = new VirtuosoPoolStatistic();
     connPool = new ConnCache(this);
     propQueue = new TreeSet<Object>( new Comparator<Object>() {
           public int compare(Object a, Object b) {
@@ -91,6 +92,15 @@ public class VirtuosoConnectionPoolDataSource
       }
     }
   }
+  public synchronized VirtuosoPoolStatistic get_statistics() {
+    VirtuosoPoolStatistic v = (VirtuosoPoolStatistic)stat.clone();
+    v.setCacheParam(dataSourceName, connPool.cacheSize.get(),
+        connPool.unUsed.size(), connPool.in_Use.size());
+    return v;
+  }
+  public synchronized VirtuosoPoolStatistic[] getAll_statistics() {
+    return VirtuosoPoolManager.getInstance().getAll_statistics();
+  }
   public void close() throws SQLException {
     if (isClosed)
       return;
@@ -134,6 +144,8 @@ public class VirtuosoConnectionPoolDataSource
     synchronized(initLock) {
       if (!isInitialized) {
         isInitialized = true;
+        if (initialPoolSize == 0)
+          initialPoolSize = minPoolSize;
         if (initialPoolSize != 0) {
           OpenHelper initThread = new OpenHelper(initialPoolSize, info);
           initThread.start();
@@ -170,6 +182,8 @@ public class VirtuosoConnectionPoolDataSource
     synchronized(initLock) {
       if (!isInitialized) {
         isInitialized = true;
+        if (initialPoolSize == 0)
+          initialPoolSize = minPoolSize;
         if (initialPoolSize != 0) {
           OpenHelper initThread = new OpenHelper(initialPoolSize, info);
           initThread.start();
@@ -188,7 +202,7 @@ public class VirtuosoConnectionPoolDataSource
   public void setMinPoolSize(int parm) throws SQLException
   {
     try {
-      Field fld = getClass().getDeclaredField(this.n_minPoolSize);
+      Field fld = getClass().getField(this.n_minPoolSize);
       setField(fld, parm);
     } catch (Exception e) {
       throw new VirtuosoException("Error: "+e.toString(), VirtuosoException.OK);
@@ -200,7 +214,7 @@ public class VirtuosoConnectionPoolDataSource
   public void setMaxPoolSize(int parm) throws SQLException
   {
     try {
-      Field fld = getClass().getDeclaredField(this.n_maxPoolSize);
+      Field fld = getClass().getField(this.n_maxPoolSize);
       setField(fld, parm);
     } catch (Exception e) {
       throw new VirtuosoException("Error: "+e.toString(), VirtuosoException.OK);
@@ -212,7 +226,7 @@ public class VirtuosoConnectionPoolDataSource
   public void setInitialPoolSize(int parm) throws SQLException
   {
     try {
-      Field fld = getClass().getDeclaredField(this.n_initialPoolSize);
+      Field fld = getClass().getField(this.n_initialPoolSize);
       setField(fld, parm);
     } catch (Exception e) {
       throw new VirtuosoException("Error: "+e.toString(), VirtuosoException.OK);
@@ -224,7 +238,7 @@ public class VirtuosoConnectionPoolDataSource
   public void setMaxIdleTime(int parm) throws SQLException
   {
     try {
-      Field fld = getClass().getDeclaredField(this.n_maxIdleTime);
+      Field fld = getClass().getField(this.n_maxIdleTime);
       setField(fld, parm);
     } catch (Exception e) {
       throw new VirtuosoException("Error: "+e.toString(), VirtuosoException.OK);
@@ -242,7 +256,7 @@ public class VirtuosoConnectionPoolDataSource
   public void setMaxStatements(int parm) throws SQLException
   {
     try {
-      Field fld = getClass().getDeclaredField(this.n_maxStatements);
+      Field fld = getClass().getField(this.n_maxStatements);
       setField(fld, parm);
     } catch (Exception e) {
       throw new VirtuosoException("Error: "+e.toString(), VirtuosoException.OK);
@@ -285,25 +299,27 @@ public class VirtuosoConnectionPoolDataSource
       setName("Virtuoso OpenHelper");
     }
     public void run() {
-      if (connPool.cacheSize >= count || (maxPoolSize != 0 && connPool.cacheSize > maxPoolSize))
+      int cacheSize = connPool.cacheSize.get();
+      if (cacheSize >= count ||
+          (maxPoolSize != 0 && cacheSize >= maxPoolSize))
         return;
       for(int i = 0; i < count; i++)
         try {
-          VirtuosoConnection conn = new VirtuosoConnection (conn_url, "localhost", 1111, info);
-          connPool.addPooledConnection(new VirtuosoPooledConnection(conn, connKey));
-          if (connPool.cacheSize >= count || (maxPoolSize != 0 && connPool.cacheSize > maxPoolSize))
+          connPool.tryAddConnection(conn_url, connKey, info);
+          cacheSize = connPool.cacheSize.get();
+          if ((minPoolSize != 0 && cacheSize >= minPoolSize)
+              || (maxPoolSize != 0 && cacheSize >= maxPoolSize))
             return;
-        } catch (Exception e) {
-        }
+        } catch (Exception e) { }
     }
   }
   private class CloseHelper extends Thread {
-    private ArrayList connList;
+    private List connList;
     private PooledConnection pconn;
     private CloseHelper() {
       setName("Virtuoso CloseHelper");
     }
-    protected CloseHelper(ArrayList _connList) {
+    protected CloseHelper(List _connList) {
       this();
       connList = _connList;
     }
@@ -313,189 +329,259 @@ public class VirtuosoConnectionPoolDataSource
     }
     public void run() {
       if (connList != null) {
-        for(Iterator i = connList.iterator(); i.hasNext(); )
+        for(ListIterator i = connList.listIterator(); i.hasNext(); ) {
           try {
             ((VirtuosoPooledConnection)i.next()).close();
-          } catch (Exception e) { }
+          } catch (Exception e) {
+          } finally {
+            connPool.cacheSize.decrementAndGet();
+          }
+        }
         connList.clear();
       } else {
         try {
           pconn.close();
         } catch (Exception e) {
+        } finally {
+          connPool.cacheSize.decrementAndGet();
         }
       }
     }
   }
   private class ConnCache {
-    private LinkedList<Object> unUsed = new LinkedList<Object>();
-    private HashMap<Object,Object> in_Use = new HashMap<Object,Object>(32);
-    private int cacheSize = 0;
+    AtomicInteger cacheSize;
+    LinkedList<VirtuosoPooledConnection> unUsed;
+    ConcurrentHashMap<VirtuosoPooledConnection,VirtuosoPooledConnection> in_Use;
+    Object lck_new = new Object();
     private VirtuosoConnectionPoolDataSource cpds;
     private ConnCache(VirtuosoConnectionPoolDataSource _cpds) {
+      unUsed = new LinkedList<VirtuosoPooledConnection>();
+      in_Use = new ConcurrentHashMap<VirtuosoPooledConnection,VirtuosoPooledConnection>(32);
+      cacheSize = new AtomicInteger(0);
       cpds = _cpds;
     }
-    private void addPooledConnection(VirtuosoPooledConnection pconn) {
+    public void finalize () throws Throwable {
+      clear ();
+    }
+    private void tryAddConnection(String conn_url, String connKey, Properties info) {
+      VirtuosoConnection conn = null;
+      VirtuosoPooledConnection pconn;
+      if (checkForNewConn()) {
+        try {
+          conn = new VirtuosoConnection (conn_url, "localhost", 1111, info);
+          pconn = new VirtuosoPooledConnection(conn, connKey, cpds);
+          connPool.addPooledConnection(pconn, true);
+        } catch(SQLException e) {
+          cacheSize.decrementAndGet();
+          if (conn!=null) {
+            try {
+              conn.close();
+            } catch(Exception e1) { }
+          }
+        }
+      }
+    }
+    private void addPooledConnection(VirtuosoPooledConnection pconn, boolean reuse)
+        throws java.sql.SQLException
+    {
+      if (isClosed)
+          throw new VirtuosoException("Cache was closed", VirtuosoException.OK);
+      synchronized(unUsed) {
+        unUsed.addLast(pconn);
+      }
+      if (!reuse)
+        cacheSize.incrementAndGet();
       synchronized(this) {
-        connPool.unUsed.addLast(pconn);
-        connPool.cacheSize++;
         notifyAll();
       }
     }
     private void clear() throws SQLException {
       VirtuosoPooledConnection pconn;
-      synchronized (this) {
-        for(Iterator iterator = in_Use.keySet().iterator(); iterator.hasNext(); ) {
-          pconn = (VirtuosoPooledConnection)iterator.next();
-          pconn.removeConnectionEventListener(cpds);
-          cacheSize--;
-          try {
-            pconn.close();
-          } catch (Exception e) {}
-        }
-        in_Use.clear();
-        for(Iterator iterator = unUsed.iterator(); iterator.hasNext(); ) {
-          pconn = (VirtuosoPooledConnection)iterator.next();
-          cacheSize--;
+      for(Iterator iterator = in_Use.keySet().iterator(); iterator.hasNext(); ) {
+        pconn = (VirtuosoPooledConnection)iterator.next();
+        pconn.removeConnectionEventListener(cpds);
+        try {
+          pconn.close();
+        } catch (Exception e) {}
+      }
+      in_Use.clear();
+      synchronized(unUsed) {
+        Iterator<VirtuosoPooledConnection> iterator;
+        for(iterator = unUsed.iterator(); iterator.hasNext(); ) {
+          pconn = iterator.next();
           try {
             pconn.close();
           } catch (Exception e) {}
         }
         unUsed.clear();
       }
+      cacheSize.set(0);
     }
-    private void reusePooledConnection(VirtuosoPooledConnection pconn) throws SQLException {
+    private void reusePooledConnection(VirtuosoPooledConnection pconn)
+     throws SQLException
+    {
+      if (isClosed)
+          throw new VirtuosoException("Cache was closed", VirtuosoException.OK);
       if (pconn == null)
         return;
-      boolean reUsed = true;
       pconn.removeConnectionEventListener(cpds);
-      synchronized(this) {
-        VirtuosoPooledConnection pooledConn = null;
-        if ((pooledConn = (VirtuosoPooledConnection)in_Use.remove(pconn)) == null) {
+      VirtuosoPooledConnection pooledConn = null;
+      if ((pooledConn = (VirtuosoPooledConnection)in_Use.remove(pconn)) == null)
           throw new VirtuosoException("Unexpected state of cache", VirtuosoException.OK);
-        }
-        if (maxPoolSize != 0 && cacheSize > maxPoolSize) {
-          cacheSize--;
-          reUsed = false;
-        } else {
-          pooledConn = pconn.reuse();
-          unUsed.addFirst(pooledConn);
-          notifyAll();
-        }
-      }
-      if ( !reUsed) {
+      if (maxPoolSize != 0 && cacheSize.get() > maxPoolSize) {
         CloseHelper helpThread = new CloseHelper(pconn);
         helpThread.start();
+      } else {
+        pooledConn = pconn.reuse();
+        addPooledConnection(pooledConn, true);
       }
     }
-    private void closePooledConnection(VirtuosoPooledConnection pconn) throws SQLException {
+    private void closePooledConnection(VirtuosoPooledConnection pconn)
+     throws SQLException
+    {
+      if (isClosed)
+          throw new VirtuosoException("Cache was closed", VirtuosoException.OK);
       pconn.removeConnectionEventListener(cpds);
-      synchronized(this) {
-        VirtuosoPooledConnection pooledConn;
-        if ((pooledConn = (VirtuosoPooledConnection)in_Use.remove(pconn)) == null)
+      VirtuosoPooledConnection pooledConn;
+      if ((pooledConn = (VirtuosoPooledConnection)in_Use.remove(pconn)) == null)
           throw new VirtuosoException("Unexpected state of cache", VirtuosoException.OK);
-        cacheSize--;
+      try {
+        pconn.close();
+      } finally {
+        cacheSize.decrementAndGet();
       }
-      pconn.close();
     }
-    private VirtuosoPooledConnection lookup(String _Key) {
+    private VirtuosoPooledConnection lookup(String _Key)
+        throws java.sql.SQLException
+    {
+      if (isClosed)
+          throw new VirtuosoException("Cache was closed", VirtuosoException.OK);
+      ArrayList<VirtuosoPooledConnection> closeTmp = new ArrayList<VirtuosoPooledConnection>();
       VirtuosoPooledConnection pooledConn;
       int _hashKey = _Key.hashCode();
-      for(Iterator iterator = unUsed.iterator(); iterator.hasNext(); ) {
-        pooledConn = (VirtuosoPooledConnection)iterator.next();
-        if (pooledConn.hashConnURL == _hashKey && pooledConn.connURL.equals(_Key)) {
-            iterator.remove();
-            return pooledConn;
+      try {
+        synchronized(unUsed) {
+          for(ListIterator iterator = unUsed.listIterator(); iterator.hasNext(); ) {
+            pooledConn = (VirtuosoPooledConnection)iterator.next();
+            if (pooledConn.hashConnURL == _hashKey && pooledConn.connURL.equals(_Key)) {
+              iterator.remove();
+       if (pooledConn.isConnectionLost(1)) {
+                closeTmp.add(pooledConn);
+       } else {
+                return pooledConn;
+       }
+            }
+          }
+        }
+        return null;
+      } finally {
+        if (closeTmp.size() > 0) {
+          CloseHelper helpThread = new CloseHelper(closeTmp);
+          helpThread.start();
         }
       }
-      return null;
+    }
+    private boolean checkForNewConn() {
+      synchronized(lck_new)
+      {
+        if (maxPoolSize == 0 || cacheSize.get() < maxPoolSize) {
+          cacheSize.incrementAndGet();
+          return true;
+        } else
+          return false;
+      }
     }
     private PooledConnection getPooledConnection(Properties info,
                                                  String connKey,
                                                  String conn_url)
         throws java.sql.SQLException
     {
+      if (isClosed)
+          throw new VirtuosoException("Cache was closed", VirtuosoException.OK);
       VirtuosoPooledConnection pconn = null;
-      VirtuosoConnection conn;
-      synchronized(this) {
-        if (!unUsed.isEmpty() && (pconn = lookup(connKey)) != null) {
+      VirtuosoConnection conn = null;
+      if ((pconn = lookup(connKey)) != null) {
+        pconn.init(cpds);
+        in_Use.put(pconn, pconn);
+        stat._hits++;
+        return pconn;
+      }
+      if (checkForNewConn()) {
+        try {
+          conn = new VirtuosoConnection (conn_url, "localhost", 1111, info);
+          pconn = new VirtuosoPooledConnection(conn, connKey, cpds);
+        } catch(SQLException e) {
+          cacheSize.decrementAndGet();
+          if (conn!=null) {
+            try {
+              conn.close();
+            } catch(Exception e1) {
+            }
+          }
+          throw e;
+        }
+        in_Use.put(pconn, pconn);
+        return pconn;
+      }
+      long start = System.currentTimeMillis();
+      long _timeout = loginTimeout * 1000L;
+      Thread thr = Thread.currentThread();
+      stat._misses++;
+      while (pconn == null) {
+        if ((pconn = lookup(connKey)) != null) {
+          stat.setWaitingTime(System.currentTimeMillis() - start);
           pconn.init(cpds);
           in_Use.put(pconn, pconn);
           return pconn;
         }
-      }
-      if (maxPoolSize == 0 || cacheSize < maxPoolSize) {
         synchronized(this) {
-          conn = new VirtuosoConnection (conn_url, "localhost", 1111, info);
-          cacheSize++;
-          pconn = new VirtuosoPooledConnection(conn, connKey, cpds);
-          in_Use.put(pconn, pconn);
-        }
-        return pconn;
-      } else {
-        long start = System.currentTimeMillis();
-        long _timeout = loginTimeout * 1000L;
-        Thread thr = Thread.currentThread();
-        while (pconn == null) {
-          synchronized(this) {
-            if (!unUsed.isEmpty() && (pconn = lookup(connKey)) != null) {
-              pconn.init(cpds);
-              in_Use.put(pconn, pconn);
-              return pconn;
-            }
-            try {
-              if (loginTimeout > 0) {
-                wait(_timeout);
-                _timeout -= (System.currentTimeMillis() - start);
-                if (_timeout < 0) {
-                  throw new VirtuosoException("Connection failed loginTimeout has expired", VirtuosoException.TIMEOUT);
-                }
-              } else {
-                wait();
+          try {
+            if (loginTimeout > 0) {
+              wait(_timeout);
+              _timeout -= (System.currentTimeMillis() - start);
+              if (_timeout < 0) {
+                throw new VirtuosoException("Connection failed loginTimeout has expired", VirtuosoException.TIMEOUT);
               }
-            } catch (InterruptedException e) {
+            } else {
+              wait();
             }
-          }
+          } catch (InterruptedException e) { }
         }
       }
       return null;
     }
     private void checkPool() {
       VirtuosoPooledConnection pooledConn;
-      ArrayList<Object> closeTmp = null;
+      ArrayList<Object> closeTmp = new ArrayList<Object>();
       ListIterator l_iter;
       if (maxIdleTime != 0) {
         long minTime = System.currentTimeMillis() - maxIdleTime * 1000L;
-        synchronized(this) {
-          int count = unUsed.size();
-          closeTmp = new ArrayList<Object>(count);
-          for(l_iter = unUsed.listIterator(); l_iter.hasPrevious(); ) {
-            pooledConn = (VirtuosoPooledConnection)l_iter.previous();
+        synchronized(unUsed) {
+          for(l_iter = unUsed.listIterator(); l_iter.hasNext(); ) {
+            pooledConn = (VirtuosoPooledConnection)l_iter.next();
             if (pooledConn.tmClosed < minTime) {
                closeTmp.add(pooledConn);
                l_iter.remove();
-               cacheSize--;
             }
           }
         }
       }
-      if (maxPoolSize != 0 && cacheSize > maxPoolSize) {
-        synchronized(this) {
-          int count = cacheSize - maxPoolSize;
-          closeTmp = new ArrayList<Object>(count);
-          for(l_iter = unUsed.listIterator(); l_iter.hasPrevious() && count > 0; count--) {
-            closeTmp.add(l_iter.previous());
-            l_iter.remove();
-            cacheSize--;
-          }
-        }
+      if (maxPoolSize != 0 && cacheSize.get() > maxPoolSize) {
+         synchronized(unUsed) {
+           int count = cacheSize.get() - maxPoolSize;
+           for(l_iter = unUsed.listIterator(); l_iter.hasNext() && count > 0; count--) {
+             closeTmp.add(l_iter.next());
+             l_iter.remove();
+           }
+         }
       }
       if (closeTmp != null && closeTmp.size() > 0) {
         CloseHelper helpThread = new CloseHelper(closeTmp);
         helpThread.start();
       }
-      if (minPoolSize != 0 && cacheSize < minPoolSize) {
+      if (minPoolSize != 0 && cacheSize.get() < minPoolSize) {
         Properties info = createConnProperties();
-        int count = minPoolSize - cacheSize;
+        int count = minPoolSize - cacheSize.get();
         OpenHelper helpThread = new OpenHelper(count, info);
         helpThread.start();
       }

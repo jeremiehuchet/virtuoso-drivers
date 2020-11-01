@@ -36,10 +36,6 @@ public class VirtuosoResultSetMetaData implements ResultSetMetaData
          columnsMetaData.insertElementAt(col,i);
       }
    }
-   public void finalize() throws Throwable
-   {
-      close();
-   }
    public int getColumnCount() throws VirtuosoException
    {
       return columnsMetaData.size();
@@ -189,9 +185,9 @@ public class VirtuosoResultSetMetaData implements ResultSetMetaData
             return "VARBINARY";
          case Types.VARCHAR:
             return "VARCHAR";
-  case -9:
+         case Types.NVARCHAR:
      return "NVARCHAR";
-  case -10:
+         case Types.LONGNVARCHAR:
      return "LONG NVARCHAR";
       }
       ;

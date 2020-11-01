@@ -124,9 +124,8 @@ public class VirtuosoBlob
     if (pos - 1 < bh_offset ())
       {
         rewind();
-        init_read_len = new Long (pos - 1);
       }
-    else if (pos - 1 > bh_offset ())
+    if (pos - 1 > bh_offset ())
       init_read_len = new Long (pos - bh_offset() - 1);
     if (init_read_len != null)
       {

@@ -6,46 +6,60 @@ import java.sql.*;
 import virtuoso.sql.RdfBox;
 public class VirtuosoRdfBox implements RdfBox
 {
+    static final String gYear = "http://www.w3.org/2001/XMLSchema#gYear";
+    static final String gYearMonth = "http://www.w3.org/2001/XMLSchema#gYearMonth";
     public short rb_type;
     public short rb_lang;
     public boolean rb_is_complete;
     public boolean rb_is_outlined;
     public boolean rb_chksum_tail;
     public boolean rb_is_text_index;
+    public boolean rb_id_only;
     public long rb_ro_id;
     public Object rb_box;
     public static final int RDF_BOX_DEFAULT_TYPE = 257;
     public static final int RDF_BOX_DEFAULT_LANG = 257;
+    public static final int RDF_BOX_GEO_TYPE = 256;
     public static final int RBS_OUTLINED = 0x01;
     public static final int RBS_COMPLETE = 0x02;
     public static final int RBS_HAS_LANG = 0x04;
     public static final int RBS_HAS_TYPE = 0x08;
     public static final int RBS_CHKSUM = 0x10;
     public static final int RBS_64 = 0x20;
+    public static final int RBS_SKIP_DTP = 0x40;
+    public static final int RBS_EXT_TYPE = 0x80;
     private VirtuosoConnection connection = null;
-    public VirtuosoRdfBox (VirtuosoConnection connection, Object box, boolean is_complete, short type, short lang, long ro_id)
+    public VirtuosoRdfBox (VirtuosoConnection connection, Object box, boolean is_complete, boolean id_only, short type, short lang, long ro_id)
     {
  this.connection = connection;
- this.rb_box = box;
+        if (box instanceof DateObject)
+          this.rb_box = ((DateObject)box).getValue(true);
+        else
+   this.rb_box = box;
  this.rb_type = type;
  this.rb_lang = lang;
  this.rb_is_complete = is_complete;
  this.rb_ro_id = ro_id;
  this.rb_is_outlined = false;
  this.rb_chksum_tail = false;
+        this.rb_id_only = id_only;
     }
     public VirtuosoRdfBox (Connection connection, Object box, String type, String lang)
     {
  long ro_id;
  this.connection = (VirtuosoConnection) connection;
- this.rb_box = box;
- ro_id = rdfMakeObj (box, type, lang);
+        if (box instanceof DateObject)
+          this.rb_box = ((DateObject)box).getValue(true);
+        else
+   this.rb_box = box;
+ ro_id = rdfMakeObj (this.rb_box, type, lang);
  this.rb_type = getTypeKey (type);
  this.rb_lang = getLangKey (lang);
  this.rb_is_complete = false;
  this.rb_ro_id = ro_id;
  this.rb_is_outlined = false;
  this.rb_chksum_tail = false;
+        this.rb_id_only = false;
     }
     private long rdfMakeObj (Object box, String type, String lang)
     {
@@ -110,6 +124,7 @@ public class VirtuosoRdfBox implements RdfBox
      try
      {
        stmt.execute (sql);
+       stmt.setFetchSize(200);
        ResultSet rs = stmt.getResultSet ();
        while (rs.next ())
        {
@@ -130,34 +145,82 @@ public class VirtuosoRdfBox implements RdfBox
     }
     private void ensureTypeHash ()
     {
-      if (this.connection.rdf_type_hash.isEmpty ())
+      if (!this.connection.rdf_type_loaded)
       {
  fillHashFromSQL (this.connection.rdf_type_hash, this.connection.rdf_type_rev, "select RDT_TWOBYTE, RDT_QNAME from DB.DBA.RDF_DATATYPE");
+ this.connection.rdf_type_loaded = true;
       }
     }
     private void ensureLangHash ()
     {
-      if (this.connection.rdf_lang_hash.isEmpty ())
+      if (!this.connection.rdf_lang_loaded)
       {
  fillHashFromSQL (this.connection.rdf_lang_hash, this.connection.rdf_lang_rev, "select RL_TWOBYTE, RL_ID from DB.DBA.RDF_LANGUAGE");
+ this.connection.rdf_lang_loaded = true;
       }
+    }
+    private String _getType ()
+    {
+      ensureTypeHash ();
+      return (String) this.connection.rdf_type_hash.get (new Integer (this.rb_type));
     }
     public String getType ()
     {
-      String r;
-      ensureTypeHash ();
-      r = (String) this.connection.rdf_type_hash.get (new Integer (this.rb_type));
+      if (this.rb_type == RDF_BOX_DEFAULT_TYPE)
+        return null;
+      String r = _getType();
+      if (r == null) {
+        synchronized(connection) {
+          this.connection.rdf_type_loaded = false;
+          r = _getType();
+        }
+      }
       return r;
+    }
+    private String _getLang ()
+    {
+      ensureLangHash ();
+      return (String) this.connection.rdf_lang_hash.get (new Integer (this.rb_lang));
     }
     public String getLang ()
     {
-      String r;
-      ensureLangHash ();
-      r = (String) this.connection.rdf_lang_hash.get (new Integer (this.rb_lang));
+      if (this.rb_lang == RDF_BOX_DEFAULT_LANG)
+        return null;
+      String r = _getLang();
+      if (r == null) {
+        synchronized(connection) {
+          this.connection.rdf_lang_loaded = false;
+          r = _getLang();
+        }
+      }
       return r;
     }
     public String toString ()
     {
- return this.rb_box.toString ();
+        String retVal = "NULL";
+        if (this.rb_box != null) {
+          String o_type = getType();
+          if (o_type!=null && o_type.equals(gYear))
+          {
+            if (rb_box instanceof VirtuosoDate)
+              retVal = ((VirtuosoDate) rb_box).toXSD_String().substring(0,4);
+            else if (rb_box instanceof VirtuosoTimestamp)
+              retVal = ((VirtuosoTimestamp) rb_box).toXSD_String().substring(0,4);
+            else
+           retVal = this.rb_box.toString ();
+       }
+       else if (o_type!=null && o_type.equals(gYearMonth))
+       {
+            if (rb_box instanceof VirtuosoDate)
+              retVal = ((VirtuosoDate) rb_box).toXSD_String().substring(0,7);
+            else if (rb_box instanceof VirtuosoTimestamp)
+              retVal = ((VirtuosoTimestamp) rb_box).toXSD_String().substring(0,7);
+            else
+           retVal = this.rb_box.toString ();
+          } else {
+         retVal = this.rb_box.toString ();
+          }
+        }
+        return retVal;
     }
 }

@@ -267,19 +267,17 @@ class VirtuosoInputStream extends BufferedInputStream
        {
          if (VirtuosoFuture.rpc_log != null)
            {
-             synchronized (VirtuosoFuture.rpc_log)
-               {
-                 VirtuosoFuture.rpc_log.println ("(conn " + connection.hashCode() + ") **** runtime " +
+                 VirtuosoFuture.rpc_log.println ("  **(conn " + connection.hashCode() + ") **** runtime " +
                      e.getClass().getName() + " encountered while reading tag " + tag);
                  e.printStackTrace(VirtuosoFuture.rpc_log);
-               }
            }
-         throw new Error (e.getClass().getName() + ":" + e.getMessage());
+           throw new VirtuosoException(e.getClass().getName() + ":" + e.getMessage(),VirtuosoException.IOERROR);
        }
    }
    private final String convByte2UTF(byte[] data) throws IOException {
         int utflen = data.length;
         char[] c_arr = new char[utflen];
+        char bad_char = '?';
         int c, c2, c3;
         int count = 0;
         int ch_count=0;
@@ -298,31 +296,34 @@ class VirtuosoInputStream extends BufferedInputStream
                     break;
                 case 12: case 13:
                     count += 2;
-                    if (count > utflen)
-                        throw new UTFDataFormatException(
-                            "malformed input: partial character at end");
-                    c2 = (int) data[count-1];
-                    if ((c2 & 0xC0) != 0x80)
-                        throw new UTFDataFormatException(
-                            "malformed input around byte " + count);
-                    c_arr[ch_count++]=(char)(((c & 0x1F) << 6) | (c2 & 0x3F));
+                    if (count > utflen) {
+                        c_arr[ch_count++]=(char)c;
+                    } else {
+                        c2 = (int) data[count-1];
+                        if ((c2 & 0xC0) != 0x80)
+                          c_arr[ch_count++] = bad_char;
+                        else
+                          c_arr[ch_count++] = (char)(((c & 0x1F) << 6) | (c2 & 0x3F));
+                    }
                     break;
                 case 14:
                     count += 3;
-                    if (count > utflen)
-                        throw new UTFDataFormatException(
-                            "malformed input: partial character at end");
-                    c2 = (int) data[count-2];
-                    c3 = (int) data[count-1];
-                    if (((c2 & 0xC0) != 0x80) || ((c3 & 0xC0) != 0x80))
-                        throw new UTFDataFormatException(
-                            "malformed input around byte " + (count-1));
-                    c_arr[ch_count++]=(char)(((c & 0x0F) << 12) |
-                                                ((c2 & 0x3F) << 6) |
-                                                ((c3 & 0x3F) << 0));
+                    if (count > utflen) {
+                        c_arr[ch_count++]=(char)c;
+                    } else {
+                        c2 = (int) data[count-2];
+                        c3 = (int) data[count-1];
+                        if (((c2 & 0xC0) != 0x80) || ((c3 & 0xC0) != 0x80))
+                          c_arr[ch_count++] = bad_char;
+                        else
+                          c_arr[ch_count++] = (char)(((c & 0x0F) << 12) |
+                                                    ((c2 & 0x3F) << 6) |
+                                                    ((c3 & 0x3F) << 0));
+                    }
                     break;
                 default:
-                    throw new UTFDataFormatException("malformed input around byte " + count);
+                    count++;
+                    c_arr[ch_count++] = bad_char;
             }
         }
         return new String(c_arr, 0, ch_count);
@@ -438,35 +439,67 @@ class VirtuosoInputStream extends BufferedInputStream
    private VirtuosoRdfBox readRdfBox () throws IOException, VirtuosoException
    {
       int flags = read ();
-      Object box;
-      short type;
-      short lang;
+      Object box = null;
+      short type = VirtuosoRdfBox.RDF_BOX_DEFAULT_TYPE;
+      short lang = VirtuosoRdfBox.RDF_BOX_DEFAULT_LANG;
       boolean is_complete = false;
       long ro_id = 0L;
+      boolean id_only = false;
       VirtuosoRdfBox rb;
-      if (0 != (flags & VirtuosoRdfBox.RBS_CHKSUM))
+      if (0 != (flags & VirtuosoRdfBox.RBS_EXT_TYPE))
       {
- throw new VirtuosoException ("Invalid rdf box received", "42000", VirtuosoException.MISCERROR);
+        int ID_ONLY = VirtuosoRdfBox.RBS_HAS_LANG | VirtuosoRdfBox.RBS_HAS_TYPE;
+        if ((flags & ID_ONLY) == ID_ONLY) {
+            id_only = true;
+        } else if ((flags & VirtuosoRdfBox.RBS_HAS_LANG)!=0){
+            lang = readshort();
+        } else {
+            type = readshort();
+        }
+        if (0 != (flags & VirtuosoRdfBox.RBS_64))
+            ro_id = readlong();
+        else
+            ro_id = readlongint();
+        if (0 != (flags & VirtuosoRdfBox.RBS_COMPLETE)){
+            is_complete = true;
+            box = read_object ();
+        }
+      } else {
+        if (0 != (flags & VirtuosoRdfBox.RBS_CHKSUM))
+        {
+   throw new VirtuosoException ("Invalid rdf box received", "42000", VirtuosoException.MISCERROR);
+        }
+        if (0 != (flags & VirtuosoRdfBox.RBS_SKIP_DTP))
+        {
+   int n = readshortint();
+   byte[] array = new byte[n];
+   for(int i = read(array,0,(int)n) ; i != n ; i+=read(array,i,(int)n-i));
+   if (connection.charset_utf8)
+       box = convByte2UTF(array);
+   else
+       box = convByte2Ascii(array);
+        }
+        else
+          box = read_object ();
+        if (0 != (flags & VirtuosoRdfBox.RBS_OUTLINED))
+        {
+   if (0 != (flags & VirtuosoRdfBox.RBS_64))
+     ro_id = readlong();
+   else
+     ro_id = readlongint ();
+        }
+        if (0 != (flags & VirtuosoRdfBox.RBS_COMPLETE))
+   is_complete = true;
+        if (0 != (flags & VirtuosoRdfBox.RBS_HAS_TYPE))
+   type = readshort ();
+        else
+   type = VirtuosoRdfBox.RDF_BOX_DEFAULT_TYPE;
+        if (0 != (flags & VirtuosoRdfBox.RBS_HAS_LANG))
+   lang = readshort ();
+        else
+   lang = VirtuosoRdfBox.RDF_BOX_DEFAULT_LANG;
       }
-      box = read_object ();
-      if (0 != (flags & VirtuosoRdfBox.RBS_OUTLINED))
-      {
- if (0 != (flags & VirtuosoRdfBox.RBS_64))
-   ro_id = readlong();
- else
-   ro_id = readlongint ();
-      }
-      if (0 != (flags & VirtuosoRdfBox.RBS_COMPLETE))
- is_complete = true;
-      if (0 != (flags & VirtuosoRdfBox.RBS_HAS_TYPE))
- type = readshort ();
-      else
- type = VirtuosoRdfBox.RDF_BOX_DEFAULT_TYPE;
-      if (0 != (flags & VirtuosoRdfBox.RBS_HAS_LANG))
- lang = readshort ();
-      else
- lang = VirtuosoRdfBox.RDF_BOX_DEFAULT_LANG;
-      rb = new VirtuosoRdfBox (this.connection, box, is_complete, type, lang, ro_id);
+      rb = new VirtuosoRdfBox(this.connection, box, is_complete, id_only, type, lang, ro_id);
       return rb;
    }
    private Object readObject() throws IOException, VirtuosoException
@@ -491,13 +524,17 @@ class VirtuosoInputStream extends BufferedInputStream
    private Object readDate(int tag) throws IOException
    {
       java.util.Calendar cal_dat = new java.util.GregorianCalendar ();
-      int day = read() << 16 | read() << 8 | read();
+      int d0 = read();
+      int day = d0 << 16 | read() << 8 | read();
       int hour = read();
       int temp = read();
       int minute = temp >> 2;
       int second = (((temp & 0x3) << 4) | ((temp = read()) >> 4));
       int fraction = (((temp & 0xf) << 16) | (read() << 8) | read());
       int tz_bytes[] = new int[2], tz_interm;
+      day = day | ((d0 & 0x80)!=0 ? 0xff000000 : 0);
+      int tzless = hour >> 7;
+      hour &= 0x1F;
       tz_bytes[0] = read();
       tz_bytes[1] = read();
       int tz = (((int)(tz_bytes[0] & 0x07)) << 8) | tz_bytes[1];
@@ -512,127 +549,6 @@ class VirtuosoInputStream extends BufferedInputStream
       tz = ((int)(tz_interm << 8)) | tz_bytes[1];
       if (tz > 32767)
  tz -= 65536;
-      if(tz != 0)
- {
-   int sec = time_to_sec (0, hour, minute, second);
-   sec += 60 * tz;
-   if (sec < 0)
-     {
-       day = day - (1 + ((-sec) / SPERDAY));
-       sec = sec % SPERDAY;
-       if (sec == 0)
-  day++;
-       sec = SPERDAY + sec;
-     }
-   else
-     {
-       day = day + sec / SPERDAY;
-       sec = sec % SPERDAY;
-     }
-   int dummy_day = sec / SPERDAY;
-   hour = (sec - (dummy_day * SPERDAY)) / (60 * 60);
-   minute = (sec - (dummy_day * SPERDAY) - (hour * 60 * 60)) / 60;
-   second = sec % 60;
- }
-      num2date(day, cal_dat);
-      cal_dat.set (Calendar.HOUR_OF_DAY, hour);
-      cal_dat.set (Calendar.MINUTE, minute);
-      cal_dat.set (Calendar.SECOND, second);
-      switch(type)
-      {
-         case VirtuosoTypes.DT_TYPE_DATE:
-            return new java.sql.Date(cal_dat.getTime().getTime());
-         case VirtuosoTypes.DT_TYPE_TIME:
-            return new java.sql.Time(cal_dat.getTime().getTime());
-         default:
-            {
-               Timestamp _return = new java.sql.Timestamp(cal_dat.getTime().getTime());
-               _return.setNanos(fraction * 1000);
-               return _return;
-            }
-      }
+      return new DateObject(day, hour, minute, second, fraction, tz, type);
    }
-   static final int SPERDAY = (24 * 60 * 60);
-   static int time_to_sec (int day, int hour, int min, int sec)
-     {
-       return (day * SPERDAY + hour * 60 * 60 + min * 60 + sec);
-     }
-   public static void num2date(int julian_days, Calendar date)
-   {
-      double x;
-      int i, year;
-      if(julian_days > 577737)
-         julian_days += 10;
-      x = ((double)julian_days) / 365.25;
-      i = (int)x;
-      if((double)i != x)
-         year = i + 1;
-      else
- {
-   year = i;
-   i--;
- }
-      if(julian_days > 577737)
-      {
-         julian_days -= ((year / 400) - (1582 / 400));
-         julian_days += ((year / 100) - (1582 / 100));
-         x = ((double)julian_days) / 365.25;
-         i = (int)x;
-         if((double)i != x)
-            year = i + 1;
-         else
-    {
-      year = i;
-      i--;
-    }
-         if((year % 400) != 0 && (year % 100) == 0)
-            julian_days--;
-      }
-      i = (int)(julian_days - ((int) (i * 365.25)));
-      if((year > 1582)
-   && (year % 400) != 0
-   && (year % 100) == 0
-   && (i < ((year / 100) - (1582 / 100)) - ((year / 400) - (1582 / 400))))
- i++;
-      date.set (Calendar.YEAR, year);
-      yearday2date(i,(VirtuosoOutputStream.days_in_february(year) == 29),date);
-   }
-   static final int GREG_JDAYS = 577737;
-   static final int GREG_LAST_DAY = 14;
-   static final int GREG_FIRST_DAY = 5;
-   static final int GREG_MONTH = 10;
-   static final int GREG_YEAR = 1582;
-   static final int DAY_LAST = 365;
-   static final int DAY_MIN = 1;
-   static final int MONTH_MIN = 1;
-   static final int MONTH_MAX = 12;
-   static final int MONTH_LAST = 31;
-   static final int days_in_month[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-   static void yearday2date(int yday, boolean is_leap_year, Calendar date)
-     {
-       int i;
-       boolean decrement_date;
-       int month, day;
-       if (yday > DAY_LAST + (is_leap_year ? 1 : 0) || yday < DAY_MIN)
-  return;
-       decrement_date = (is_leap_year && (yday > 59));
-       if (decrement_date)
-  yday--;
-       for (i = MONTH_MIN; i < MONTH_MAX; i++)
-  {
-    yday -= days_in_month[i - 1];
-    if (yday <= 0)
-      {
-        yday += days_in_month[i - 1];
-        break;
-      }
-  }
-       month = i;
-       day = yday;
-       if (decrement_date && month == 2 && day == 28)
-  day = day + 1;
-       date.set(Calendar.MONTH, month - 1);
-       date.set(Calendar.DAY_OF_MONTH, day);
-       return;
-     }
 }

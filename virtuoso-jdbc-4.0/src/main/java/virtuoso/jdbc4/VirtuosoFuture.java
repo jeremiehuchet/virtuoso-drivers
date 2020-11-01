@@ -18,7 +18,7 @@ class VirtuosoFuture
    private VirtuosoConnection connection;
    private openlink.util.Vector results = new openlink.util.Vector(5);
    private boolean is_complete = false;
-   protected static PrintStream rpc_log = null;
+   protected static PrintWriter rpc_log = null;
    VirtuosoFuture(VirtuosoConnection connection, String rpcname, Object[] args, int req_no, int timeout)
        throws IOException, VirtuosoException
    {
@@ -93,14 +93,5 @@ class VirtuosoFuture
       if(obj != null && (obj instanceof VirtuosoFuture))
          return ((VirtuosoFuture)obj).req_no == req_no;
       return false;
-   }
-   public void finalize() throws Throwable
-   {
-      connection = null;
-      if(results != null)
-      {
-         results.removeAllElements();
-         results = null;
-      }
    }
 }
