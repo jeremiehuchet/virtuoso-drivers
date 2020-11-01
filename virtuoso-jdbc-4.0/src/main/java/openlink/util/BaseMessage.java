@@ -9,7 +9,7 @@ abstract public class BaseMessage {
   protected ResourceBundle rb;
   protected String defaultMessage;
   protected String msgPrefix;
-    public static final String err_Prefix = "[OpenLink][OPLJDBC4]";
+  public static final String err_Prefix = "[OpenLink][OPLJDBC4]";
   protected void init(String resourceFile) {
     defaultMessage = RESBUNDLE_NOTFOUND + (resourceFile != null ? resourceFile : "null") + "'";
     if (resourceFile == null)

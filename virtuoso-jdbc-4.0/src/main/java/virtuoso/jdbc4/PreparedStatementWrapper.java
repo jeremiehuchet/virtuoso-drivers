@@ -23,45 +23,9 @@ import java.sql.RowId;
 import java.sql.SQLXML;
 import java.sql.NClob;
 public class PreparedStatementWrapper
-          extends StatementWrapper implements PreparedStatement, Cloneable {
-  protected String stmtKey;
-  protected int hashStmtKey;
-  protected PreparedStatementWrapper(ConnectionWrapper _wconn, PreparedStatement _stmt, String _stmtKey) {
+          extends StatementWrapper implements PreparedStatement {
+  protected PreparedStatementWrapper(ConnectionWrapper _wconn, PreparedStatement _stmt) {
     super(_wconn, _stmt);
-    stmtKey = _stmtKey;
-    hashStmtKey = stmtKey.hashCode();
-  }
-  protected void addLink() {
-    if (wconn != null)
-      wconn.pStmtPool.addToUsed(this);
-  }
-  protected void removeLink() {
-    try {
-      if (wconn != null)
-        wconn.pStmtPool.reuse(this);
-    } catch (Exception e) {}
-  }
-  protected synchronized void closeAll() {
-    wconn = null;
-    try {
-      close();
-    } catch(Exception e) { }
-  }
-  protected synchronized Object clone() {
-    try {
-      PreparedStatementWrapper v = (PreparedStatementWrapper)super.clone();
-      v.isClosed = false;
-      return v;
-    } catch (CloneNotSupportedException e) {
-      throw new InternalError();
-    }
-  }
-  protected PreparedStatementWrapper reuse() throws SQLException {
-    reset();
-    PreparedStatementWrapper pStmt = (PreparedStatementWrapper)clone();
-    stmt = null;
-    objsToClose = null;
-    return pStmt;
   }
   public ResultSet executeQuery() throws SQLException {
     check_close();
@@ -349,11 +313,7 @@ public class PreparedStatementWrapper
   public ResultSetMetaData getMetaData() throws SQLException {
     check_close();
     try {
-      ResultSetMetaData rsmd = ((PreparedStatement)stmt).getMetaData();
-      if (rsmd != null)
-        return new ResultSetMetaDataWrapper(rsmd, wconn);
-      else
-        return null;
+      return ((PreparedStatement)stmt).getMetaData();
     } catch (SQLException ex) {
       exceptionOccurred(ex);
       throw ex;
@@ -407,11 +367,7 @@ public class PreparedStatementWrapper
   public java.sql.ParameterMetaData getParameterMetaData() throws SQLException {
     check_close();
     try {
-      java.sql.ParameterMetaData prmd = ((PreparedStatement)stmt).getParameterMetaData();
-      if (prmd != null)
-        return new ParameterMetaDataWrapper(prmd, wconn);
-      else
-        return null;
+      return ((PreparedStatement)stmt).getParameterMetaData();
     } catch (SQLException ex) {
       exceptionOccurred(ex);
       throw ex;

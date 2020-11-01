@@ -25,6 +25,8 @@ public class VirtuosoDataSourceFactory implements ObjectFactory {
       return null;
     if (ds != null) {
       StringRefAddr refS;
+      if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_logFileName)) != null)
+          ((VirtuosoDataSource) ds).setLogFileName((String)refS.getContent());
       if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_dataSourceName)) != null)
           ((VirtuosoDataSource) ds).setDataSourceName((String)refS.getContent());
       if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_description)) != null)
@@ -39,12 +41,32 @@ public class VirtuosoDataSourceFactory implements ObjectFactory {
           ((VirtuosoDataSource) ds).setUser((String)refS.getContent());
       if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_password)) != null)
           ((VirtuosoDataSource) ds).setPassword((String)refS.getContent());
+      if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_delegate)) != null)
+          ((VirtuosoDataSource) ds).setDelegate((String)refS.getContent());
       if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_loginTimeout)) != null)
           ((VirtuosoDataSource) ds).setLoginTimeout(Integer.parseInt((String)refS.getContent()));
-      if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_charSet)) != null)
+      if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_charset)) != null)
+          ((VirtuosoDataSource) ds).setCharset((String)refS.getContent());
+      else if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_charSet)) != null)
           ((VirtuosoDataSource) ds).setCharset((String)refS.getContent());
       if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_pwdclear)) != null)
           ((VirtuosoDataSource) ds).setPwdClear((String)refS.getContent());
+      if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_log_enable)) != null)
+          ((VirtuosoDataSource) ds).setLog_Enable(Integer.parseInt((String)refS.getContent()));
+      if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_certificate)) != null)
+          ((VirtuosoDataSource) ds).setCertificate((String)refS.getContent());
+      if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_keystorepass)) != null)
+          ((VirtuosoDataSource) ds).setKeystorepass((String)refS.getContent());
+      if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_keystorepath)) != null)
+          ((VirtuosoDataSource) ds).setKeystorepath((String)refS.getContent());
+      if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_provider)) != null)
+          ((VirtuosoDataSource) ds).setProvider((String)refS.getContent());
+      if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_truststorepass)) != null)
+          ((VirtuosoDataSource) ds).setTruststorepass((String)refS.getContent());
+      if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_truststorepath)) != null)
+          ((VirtuosoDataSource) ds).setTruststorepath((String)refS.getContent());
+      if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_ssl)) != null)
+          ((VirtuosoDataSource) ds).setSsl(Boolean.getBoolean((String)refS.getContent()));
       if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_fbs)) != null)
           ((VirtuosoDataSource) ds).setFbs(Integer.parseInt((String)refS.getContent()));
       if ((refS = (StringRefAddr)ref.get(VirtuosoDataSource.n_sendbs)) != null)

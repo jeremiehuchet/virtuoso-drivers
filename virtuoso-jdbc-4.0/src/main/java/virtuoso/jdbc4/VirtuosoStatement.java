@@ -13,17 +13,21 @@ public class VirtuosoStatement implements Statement
    private int fetchDirection = VirtuosoResultSet.FETCH_FORWARD;
    protected VirtuosoConnection connection;
    private int maxFieldSize;
-   private int prefetch = VirtuosoTypes.DEFAULTPREFETCH;
+   protected int prefetch = VirtuosoTypes.DEFAULTPREFETCH;
    private int maxRows;
    protected int txn_timeout;
    protected int rpc_timeout;
    protected String statid, cursorName;
-   protected boolean close_flag = false;
+   protected volatile boolean close_flag = false;
+   protected boolean wait_result = false;
+   protected boolean result_opened = false;
+   protected boolean sparql_executed = false;
    protected static int req_no;
    protected VirtuosoResultSet vresultSet;
    protected VirtuosoFuture future;
    protected VirtuosoResultSetMetaData metaData;
    protected boolean isCached = false;
+   protected boolean closeOnCompletion = false;
    protected VirtuosoParameterMetaData paramsMetaData = null;
    VirtuosoStatement(VirtuosoConnection connection) throws VirtuosoException
    {
@@ -41,7 +45,7 @@ public class VirtuosoStatement implements Statement
          this.type = type;
       else
          throw new VirtuosoException("Bad parameters.",VirtuosoException.BADPARAM);
-      if(concurrency == VirtuosoResultSet.CONCUR_READ_ONLY || concurrency == VirtuosoResultSet.CONCUR_UPDATABLE)
+      if(concurrency == VirtuosoResultSet.CONCUR_READ_ONLY || concurrency == VirtuosoResultSet.CONCUR_UPDATABLE || concurrency == VirtuosoResultSet.CONCUR_VALUES)
          this.concurrency = concurrency;
       else
          throw new VirtuosoException("Bad parameters.",VirtuosoException.BADPARAM);
@@ -52,22 +56,23 @@ public class VirtuosoStatement implements Statement
    protected VectorOfLong getStmtOpts () throws VirtuosoException
      {
        Long[] arrLong = new Long[11];
-       if (connection.isReadOnly ())
+       if (connection.isReadOnly ()) {
          arrLong[0] = new Long (VirtuosoTypes.SQL_CONCUR_ROWVER);
+       }
+       else {
+         if (concurrency == VirtuosoResultSet.CONCUR_VALUES)
+           arrLong[0] = new Long(VirtuosoTypes.SQL_CONCUR_VALUES);
        else
   arrLong[0] = new Long(concurrency == VirtuosoResultSet.CONCUR_READ_ONLY ?
   VirtuosoTypes.SQL_CONCUR_READ_ONLY : VirtuosoTypes.SQL_CONCUR_LOCK);
+       }
        arrLong[1] = new Long(0);
        arrLong[2] = new Long(maxRows);
        if (connection.getGlobalTransaction()) {
            VirtuosoXAConnection xac = (VirtuosoXAConnection) connection.xa_connection;
     if (VirtuosoFuture.rpc_log != null)
     {
-        synchronized (VirtuosoFuture.rpc_log)
-        {
      VirtuosoFuture.rpc_log.println ("VirtuosoStatement.getStmtOpts () xa_res=" + xac.getVirtuosoXAResource().hashCode() + " :" + hashCode());
-     VirtuosoFuture.rpc_log.flush();
-        }
     }
            arrLong[3] = new Long(xac.getVirtuosoXAResource().txn_timeout * 1000);
        } else {
@@ -75,15 +80,11 @@ public class VirtuosoStatement implements Statement
        }
      if (VirtuosoFuture.rpc_log != null)
        {
-  synchronized (VirtuosoFuture.rpc_log)
-    {
       VirtuosoFuture.rpc_log.println ("VirtuosoStatement.getStmtOpts (txn_timeout=" + arrLong[3] + ") (con=" + connection.hashCode() + ") :" + hashCode());
-      VirtuosoFuture.rpc_log.flush();
-    }
        }
        arrLong[4] = new Long(prefetch);
        arrLong[5] = new Long((connection.getAutoCommit()) ? 1 : 0);
-       arrLong[6] = new Long (rpc_timeout * 1000);
+       arrLong[6] = new Long (rpc_timeout);
        switch(type)
   {
     case VirtuosoResultSet.TYPE_FORWARD_ONLY:
@@ -104,6 +105,7 @@ public class VirtuosoStatement implements Statement
      }
    protected VirtuosoResultSet sendQuery(String sql) throws VirtuosoException
    {
+       sparql_executed = sql.trim().regionMatches(true, 0, "sparql", 0, 6);
        try
        {
     synchronized (connection)
@@ -118,7 +120,7 @@ public class VirtuosoStatement implements Statement
      close_flag = false;
         }
         else
-     cancel();
+     cancel_rs();
         args[0] = (statid == null) ? statid = new String("s" + connection.hashCode() + (req_no++)) : statid;
         args[2] = (cursorName == null) ? args[0] : cursorName;
         args[1] = connection.escapeSQL (sql);
@@ -129,7 +131,8 @@ public class VirtuosoStatement implements Statement
      vect.addElement(new openlink.util.Vector(0));
      args[5] = getStmtOpts();
      future = connection.getFuture(VirtuosoFuture.exec,args, this.rpc_timeout);
-     return new VirtuosoResultSet(this,metaData);
+     result_opened = true;
+     return new VirtuosoResultSet(this,metaData,false);
         }
         catch(IOException e)
         {
@@ -146,21 +149,63 @@ public class VirtuosoStatement implements Statement
    public void finalize() throws Throwable
    {
       close();
-      if(metaData != null)
-         metaData.close();
    }
    public void cancel() throws VirtuosoException
    {
+     synchronized (this)
+     {
+       if (future != null && wait_result == true)
+         future.sendCancelFuture();
+     }
+     cancel_rs();
+   }
+   protected void cancel_rs() throws VirtuosoException
+   {
+     if(vresultSet != null)
+     {
+       vresultSet = null;
+     }
+     if(future != null)
+       {
+         synchronized (connection)
+         {
+    connection.removeFuture(future);
+  }
+  future = null;
+       }
+   }
+   public void close_rs(boolean close_stmt, boolean is_prepared) throws VirtuosoException
+   {
+     if(close_flag)
+       return;
      synchronized (connection)
        {
-  if(vresultSet != null)
+  try
     {
-      vresultSet = null;
-    }
-  if(future != null)
-    {
+      if(close_flag)
+        return;
+      if (close_stmt)
+              close_flag = true;
+      if(statid == null)
+        return;
+      cancel_rs();
+             if (!close_stmt && !result_opened)
+               return;
+      Object[] args = new Object[2];
+      args[0] = statid;
+      args[1] = close_stmt ? new Long(VirtuosoTypes.STAT_DROP): new Long(VirtuosoTypes.STAT_CLOSE);
+      future = connection.getFuture(VirtuosoFuture.close,args, this.rpc_timeout);
+      future.nextResult();
       connection.removeFuture(future);
       future = null;
+      result_opened = false;
+      if (!is_prepared) {
+        metaData = null;
+      }
+    }
+  catch(IOException e)
+    {
+      throw new VirtuosoException("Problem during closing : " + e.getMessage(),VirtuosoException.IOERROR);
     }
        }
    }
@@ -169,29 +214,7 @@ public class VirtuosoStatement implements Statement
    }
    public void close() throws VirtuosoException
    {
-     synchronized (connection)
-       {
-  try
-    {
-      if(close_flag)
-        return;
-             close_flag = true;
-      if(statid == null)
-        return;
-      cancel();
-      Object[] args = new Object[2];
-      args[0] = statid;
-      args[1] = new Long(VirtuosoTypes.STAT_DROP);
-      future = connection.getFuture(VirtuosoFuture.close,args, this.rpc_timeout);
-      future.nextResult();
-      connection.removeFuture(future);
-      future = null;
-    }
-  catch(IOException e)
-    {
-      throw new VirtuosoException("Problem during closing : " + e.getMessage(),VirtuosoException.IOERROR);
-    }
-       }
+     close_rs(true, false);
    }
    public boolean execute(String sql) throws VirtuosoException
    {
@@ -227,13 +250,16 @@ public class VirtuosoStatement implements Statement
     {
         try
         {
-     if(vresultSet == null || vresultSet.isLastResult)
+     if(vresultSet == null || vresultSet.isLastResult) {
+         if (vresultSet.isLastResult)
+           vresultSet = null;
          return false;
+     }
      Object[] args = new Object[2];
      args[0] = statid;
      args[1] = new Long(future.hashCode());
      future.send_message(VirtuosoFuture.fetch,args);
-     vresultSet.getMoreResults();
+     vresultSet.getMoreResults(false);
      return true;
         }
         catch(IOException e)
@@ -248,11 +274,11 @@ public class VirtuosoStatement implements Statement
    }
    public int getQueryTimeout() throws VirtuosoException
    {
-      return rpc_timeout;
+      return rpc_timeout/1000;
    }
    public ResultSet getResultSet() throws VirtuosoException
    {
-      return (vresultSet.kindop() != VirtuosoTypes.QT_UPDATE)?vresultSet:null;
+      return (vresultSet!=null && vresultSet.kindop() != VirtuosoTypes.QT_UPDATE)?vresultSet:null;
    }
    public int getUpdateCount() throws VirtuosoException
    {
@@ -288,7 +314,7 @@ public class VirtuosoStatement implements Statement
    {
       if(seconds < 0)
          throw new VirtuosoException("Bad parameters.",VirtuosoException.BADPARAM);
-      rpc_timeout = seconds;
+      rpc_timeout = seconds*1000;
    }
     public Connection getConnection() throws VirtuosoException {
  return connection;
@@ -320,7 +346,7 @@ public class VirtuosoStatement implements Statement
    {
       if(rows < 0 || (maxRows > 0 && rows > maxRows))
          throw new VirtuosoException("Bad parameters.",VirtuosoException.BADPARAM);
-      prefetch = rows;
+      prefetch = (rows == 0 ? VirtuosoTypes.DEFAULTPREFETCH : rows);
    }
    public void setCursorName(String name) throws VirtuosoException
    {

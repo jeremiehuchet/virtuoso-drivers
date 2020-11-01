@@ -15,6 +15,15 @@ public class VirtuosoExplicitString
       this.dtp = dtp;
       this.bytes = bytes;
       this.str = null;
+      if (dtp == VirtuosoTypes.DV_STRING || dtp == VirtuosoTypes.DV_SHORT_STRING_SERIAL ||
+            dtp == VirtuosoTypes.DV_STRICT_STRING || dtp == VirtuosoTypes.DV_C_STRING ||
+            dtp == VirtuosoTypes.DV_BLOB || dtp == VirtuosoTypes.DV_ANY)
+        {
+            if (bytes.length < 256)
+                this.dtp = VirtuosoTypes.DV_SHORT_STRING_SERIAL;
+            else
+                this.dtp = VirtuosoTypes.DV_STRING;
+        }
     }
   protected VirtuosoExplicitString (String str, int dtp, VirtuosoConnection con) throws VirtuosoException
     {
@@ -33,22 +42,45 @@ public class VirtuosoExplicitString
   this.dtp = VirtuosoTypes.DV_LONG_WIDE;
        this.str = str;
      }
-   else if (dtp == VirtuosoTypes.DV_STRING || dtp == VirtuosoTypes.DV_SHORT_STRING_SERIAL ||
-       dtp == VirtuosoTypes.DV_STRICT_STRING || dtp == VirtuosoTypes.DV_C_STRING ||
+   else if (dtp == VirtuosoTypes.DV_STRING ||
+       dtp == VirtuosoTypes.DV_SHORT_STRING_SERIAL ||
+       dtp == VirtuosoTypes.DV_STRICT_STRING ||
+       dtp == VirtuosoTypes.DV_C_STRING ||
        dtp == VirtuosoTypes.DV_BLOB)
      {
         if (con != null && con.charset_utf8)
          bytes = str.getBytes ("UTF8");
        else if (con != null && con.charset != null)
-  {
-    bytes = con.charsetBytes(str);
-  }
+  bytes = con.charsetBytes(str);
        else
   cli_wide_to_narrow (str, con != null ? con.client_charset_hash : null);
-       if (bytes.length < 256)
-  this.dtp = VirtuosoTypes.DV_SHORT_STRING_SERIAL;
+       this.dtp = (bytes.length < 256) ? VirtuosoTypes.DV_SHORT_STRING_SERIAL : VirtuosoTypes.DV_STRING;
+     }
+   else if (dtp == VirtuosoTypes.DV_ANY)
+     {
+       if (con != null && (con.charset != null || con.charset_utf8))
+         {
+    bytes = (con.charset_utf8) ? str.getBytes ("UTF8") : con.charsetBytes(str);
+    this.dtp = (bytes.length < 256) ? VirtuosoTypes.DV_SHORT_STRING_SERIAL : VirtuosoTypes.DV_STRING;
+         }
        else
-  this.dtp = VirtuosoTypes.DV_STRING;
+  {
+    boolean wide = false;
+                  for (int i = 0; i < str.length(); i++)
+                    if (str.charAt(i) > 127) {
+                      wide = true;
+                      break;
+                    }
+                  if (wide) {
+      bytes = str.getBytes ("UTF8");
+      this.dtp = (bytes.length < 256) ? VirtuosoTypes.DV_WIDE : VirtuosoTypes.DV_LONG_WIDE;
+      this.str = str;
+                  }
+                  else {
+      cli_wide_to_narrow (str, con != null ? con.client_charset_hash : null);
+             this.dtp = (bytes.length < 256) ? VirtuosoTypes.DV_SHORT_STRING_SERIAL : VirtuosoTypes.DV_STRING;
+                  }
+  }
      }
    else if (dtp == VirtuosoTypes.DV_BLOB_BIN || dtp == VirtuosoTypes.DV_BIN)
      {
@@ -71,7 +103,9 @@ public class VirtuosoExplicitString
   }
        else
   {
-    if (con != null && con.charset != null)
+            if (con != null && con.charset_utf8)
+             bytes = str.getBytes ("UTF8");
+           else if (con != null && con.charset != null)
       bytes = con.charsetBytes(str);
     if (bytes.length < 256)
       this.dtp = VirtuosoTypes.DV_SHORT_STRING_SERIAL;
@@ -101,12 +135,13 @@ public class VirtuosoExplicitString
    return (true);
  }
       bytes = new byte[str.length()];
-      if (charset_ht == null) {
+      if (charset_ht == null)
+       {
         for (int i = 0; i < str.length(); i++)
-   {
-     bytes[i] = (byte)str.charAt(i);
-   }
-      } else {
+   bytes[i] = (byte)str.charAt(i);
+       }
+      else
+       {
         for (int i = 0; i < str.length(); i++)
    {
      Character ch = new Character (str.charAt(i));
@@ -120,7 +155,7 @@ public class VirtuosoExplicitString
      else
        bytes[i] = (byte) b.intValue();
    }
-      }
+       }
       return ret;
     }
   protected boolean cli_wide_to_escaped (String str, Hashtable ht)
@@ -144,7 +179,7 @@ public class VirtuosoExplicitString
        if (b == null)
   {
     strbuf.append ("\\x");
-    strbuf.append (Integer.toString (ch.charValue(), 16));
+                  strbuf.append (String.format("%04x", (int) ch.charValue()));
   }
        else
   {
@@ -153,10 +188,10 @@ public class VirtuosoExplicitString
      }
    else
      {
-       if (((int)curr) > 256)
+       if (((int)curr) > 255)
   {
     strbuf.append ("\\x");
-    strbuf.append (Integer.toString ((int) curr, 16));
+    strbuf.append (String.format("%04x", (int) curr));
   }
        else
   strbuf.append (curr);
@@ -180,22 +215,7 @@ public class VirtuosoExplicitString
  os.write (bytes.length);
       else
  os.writelongint (bytes.length);
-      if ((dtp == VirtuosoTypes.DV_WIDE || dtp == VirtuosoTypes.DV_LONG_WIDE)
-   && str != null)
- {
-   for (int i = 0; i < str.length(); i++)
-     {
-       byte [] utf8;
-       utf8 = str.substring(i, i + 1).getBytes("UTF8");
-       if (utf8 != null)
-  {
-    os.write (utf8, 0, utf8.length);
-    os.flush();
-  }
-     }
- }
-      else
- os.write (bytes, 0, bytes.length);
+      os.write (bytes, 0, bytes.length);
     }
   public String toString ()
     {

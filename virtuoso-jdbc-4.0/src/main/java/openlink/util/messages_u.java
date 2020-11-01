@@ -8,7 +8,7 @@ public class messages_u extends ListResourceBundle {
    { "jdbcu.err.2", "Invalid start position."},
    { "jdbcu.err.3", "Invalid length."},
    { "jdbcu.err.4", "Blob is freed."},
-   };
+  };
   protected Object[][] getContents() {
     return contents;
   }
