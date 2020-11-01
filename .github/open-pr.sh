@@ -24,7 +24,7 @@ git config user.name "Github Actions"
 # update readme with latest versions
 sed -i "s/$old_build/$new_build/g" README.md
 
-git checkout -b update-$(echo $module_label | tr '[:upper:] ' '[:lower:]-')
+git checkout -b update-$(echo $module_label | tr '[:upper:] ' '[:lower:]-')-$new_build
 git add .
 git commit -F /tmp/commit-msg.txt
 
