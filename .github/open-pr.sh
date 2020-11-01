@@ -29,5 +29,4 @@ git add .
 git commit -F /tmp/commit-msg.txt
 
 echo "🎉 Opening pull request"
-git log --graph --oneline --decorate --all
 hub pull-request --push --no-edit --assign jeremiehuchet --base main
