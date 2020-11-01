@@ -1,9 +1,9 @@
 name: check updates
 on:
   label:
-    types: [created, deleted]
-#  schedule:
-#    - cron: "0 3 * * 1"
+    types: [deleted] # temporary manual trigger
+  schedule:
+    - cron: "0 3 * * 1" # every monday at 3AM
 jobs:
   check_updates:
     name: check updates
@@ -14,7 +14,7 @@ jobs:
         run: sudo apt-get install -qqy xmlstarlet
       - name: compare current versions checksums
         run: |
-          ./.github/check-update.jdbc.sh 568b25bdbe02ce4ee7f9f4fc79727bb47940675e || (
+          ./.github/check-update.jdbc.sh || (
             echo "JDBC_UPDATE_AVAILBALE=true" >> $GITHUB_ENV
           )
       - name: stop when no update available
@@ -39,7 +39,7 @@ jobs:
         run: ./.github/fetch-jdk6.sh
 
       - name: update sources
-        run: nix-shell --run "./.github/update-sources.jdbc.sh 568b25bdbe02ce4ee7f9f4fc79727bb47940675e"
+        run: nix-shell --run "./.github/update-sources.jdbc.sh"
 
       - name: validate build
         run: nix-shell --pure --run "mvn -B package"

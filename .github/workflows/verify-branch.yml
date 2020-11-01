@@ -1,8 +1,8 @@
-name: main
+name: verify branch
 on:
   push:
     branches:
-      - main
+      - '**'
 jobs:
   build:
     name: build
