@@ -34,8 +34,12 @@ in stdenv.mkDerivation rec {
     sed -i 's/^SUBDIRS = .*/SUBDIRS = JDBCDriverType4/' libsrc/Makefile.am
   '';
 
-  configureFlags =
-    [ "--with-jdk4=${deps.jdk6}" "--with-jdk4_1=${deps.jdk7}"  "--with-jdk4_2=${deps.jdk8}" ];
+  configureFlags = [
+    "--with-jdk4=${deps.jdk6}"
+    "--with-jdk4_1=${deps.jdk7}"
+    "--with-jdk4_2=${deps.jdk8}"
+    "--with-jdk4_3=${deps.jdk9}"
+  ];
 
   postInstall = ''
     # remove anything but *.java files
@@ -45,12 +49,17 @@ in stdenv.mkDerivation rec {
     cp -r libsrc/JDBCDriverType4/virtuoso/jdbc/outstd4   $out/4.0
     cp -r libsrc/JDBCDriverType4/virtuoso/jdbc/outstd4_1 $out/4.1
     cp -r libsrc/JDBCDriverType4/virtuoso/jdbc/outstd4_2 $out/4.2
+    cp -r libsrc/JDBCDriverType4/virtuoso/jdbc/outstd4_3 $out/4.3
 
     # all jars should have the same build version
     VERSION_40=$(${jshell} --class-path $out/lib/jdbc-4.0/virtjdbc4.jar   ${printJdbcDriverBuildVersion})
     VERSION_41=$(${jshell} --class-path $out/lib/jdbc-4.1/virtjdbc4_1.jar ${printJdbcDriverBuildVersion})
     VERSION_42=$(${jshell} --class-path $out/lib/jdbc-4.2/virtjdbc4_2.jar ${printJdbcDriverBuildVersion})
-    [ "$VERSION_40" == "$VERSION_41" ] && [ "$VERSION_40" == "$VERSION_42" ] || exit 1
+    VERSION_43=$(${jshell} --class-path $out/lib/jdbc-4.3/virtjdbc4_3.jar ${printJdbcDriverBuildVersion})
+    [ "$VERSION_40" == "$VERSION_41" ] \
+        && [ "$VERSION_40" == "$VERSION_42" ] \
+        && [ "$VERSION_40" == "$VERSION_43" ] \
+        || exit 1
     echo "$VERSION_40" > $out/build-version
 
     find $out -type d -empty -delete
