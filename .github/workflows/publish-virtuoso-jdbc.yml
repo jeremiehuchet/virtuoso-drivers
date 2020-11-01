@@ -20,4 +20,4 @@ jobs:
           BINTRAY_TOKEN: ${{ secrets.BINTRAY_TOKEN }}
         run: |
           nix-shell --pure --keep BINTRAY_USERNAME --keep BINTRAY_TOKEN \
-              --run "mvn -B deploy -pl virtuoso-jdbc-4.0,virtuoso-jdbc-4.1,virtuoso-jdbc-4.2"
+              --run "mvn -B deploy -pl virtuoso-jdbc-4.0,virtuoso-jdbc-4.1,virtuoso-jdbc-4.2,virtuoso-jdbc-4.3"

@@ -71,6 +71,7 @@ Client Protocol Driver exemptions
         <module>virtuoso-jdbc-4.0</module>
         <module>virtuoso-jdbc-4.1</module>
         <module>virtuoso-jdbc-4.2</module>
+        <module>virtuoso-jdbc-4.3</module>
     </modules>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

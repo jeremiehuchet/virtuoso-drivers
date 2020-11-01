@@ -62,6 +62,16 @@ public class VirtuosoConnection implements Connection
    private static final SQLPermission SET_NETWORK_TIMEOUT_PERM = new SQLPermission("setNetworkTimeout");
    private static final SQLPermission ABORT_PERM = new SQLPermission("abort");
   private boolean useRoundRobin;
+   private boolean oAutoCommit;
+   private int oTxnIsolation;
+   private boolean oReadOnly;
+   private int oNetworkTimeout;
+   private int oHoldability;
+   private String oCatalog;
+   private volatile SQLWarning oSqlWarnings;
+   private boolean oUseCachePrepStatements;
+   private HashMap<VirtuosoStatement,Object> objsToClose = new HashMap<VirtuosoStatement,Object>();
+   private volatile int requestStarted = 0;
    protected class VhostRec
    {
      protected String host;
@@ -843,16 +853,22 @@ public class VirtuosoConnection implements Connection
    }
    public Statement createStatement(int resultSetType, int resultSetConcurrency) throws VirtuosoException
    {
-      return new VirtuosoStatement(this,resultSetType,resultSetConcurrency);
+      VirtuosoStatement stmt = new VirtuosoStatement(this,resultSetType,resultSetConcurrency);
+      if (requestStarted != 0)
+        addStmtToClose(stmt);
+      return stmt;
    }
    public CallableStatement prepareCall(String sql, int resultSetType, int resultSetConcurrency) throws VirtuosoException
    {
-      return new VirtuosoCallableStatement(this,sql,resultSetType,resultSetConcurrency);
+      VirtuosoCallableStatement stmt = new VirtuosoCallableStatement(this,sql,resultSetType,resultSetConcurrency);
+      if (requestStarted != 0)
+        addStmtToClose((VirtuosoStatement)stmt);
+      return stmt;
    }
    public PreparedStatement prepareStatement(String sql, int resultSetType, int resultSetConcurrency) throws VirtuosoException
    {
-     if (useCachePrepStatements) {
        VirtuosoPreparedStatement ps = null;
+     if (useCachePrepStatements) {
        synchronized(pStatementCache) {
          ps = pStatementCache.remove(""+resultSetType+"#"
                                        +resultSetConcurrency+"#"
@@ -866,12 +882,14 @@ public class VirtuosoConnection implements Connection
            ps.isCached = true;
          }
        }
-       return ps;
      }
      else
      {
-       return new VirtuosoPreparedStatement(this,sql,resultSetType,resultSetConcurrency);
+       ps = new VirtuosoPreparedStatement(this,sql,resultSetType,resultSetConcurrency);
      }
+     if (requestStarted != 0)
+       addStmtToClose((VirtuosoStatement)ps);
+     return ps;
    }
    public int hashCode()
    {
@@ -1276,6 +1294,77 @@ public class VirtuosoConnection implements Connection
       throw new VirtuosoException("The connection is closed.",VirtuosoException.DISCONNECTED);
     return timeout;
   }
+    public synchronized void beginRequest() throws SQLException {
+      if (requestStarted == 0) {
+          oAutoCommit = getAutoCommit();
+          oTxnIsolation = getTransactionIsolation();
+          oReadOnly = isReadOnly();
+          oNetworkTimeout = getNetworkTimeout();
+          oHoldability = getHoldability();
+          oCatalog = getCatalog();
+          oSqlWarnings = getWarnings();
+          clearCache();
+          oUseCachePrepStatements = useCachePrepStatements;
+          requestStarted = 1;
+      }
+    }
+    public synchronized void endRequest() throws SQLException {
+      if (requestStarted != 0) {
+        synchronized(this) {
+          if (!oAutoCommit) {
+              rollback();
+          }
+          if (getAutoCommit() != oAutoCommit) {
+              setAutoCommit(oAutoCommit);
+          }
+          if (getTransactionIsolation() != oTxnIsolation) {
+              setTransactionIsolation(oTxnIsolation);
+          }
+          if (isReadOnly() != oReadOnly) {
+              setReadOnly(oReadOnly);
+          }
+          if (getNetworkTimeout() != oNetworkTimeout) {
+              setNetworkTimeout(null, oNetworkTimeout);
+          }
+          if (getHoldability() != oHoldability) {
+              setHoldability(oHoldability);
+          }
+          if (!getCatalog().equals(oCatalog)) {
+              setCatalog(oCatalog);
+          }
+          warning = oSqlWarnings;
+          useCachePrepStatements = oUseCachePrepStatements;
+          clearCache();
+          requestStarted = 0;
+        }
+        if (!objsToClose.isEmpty()) {
+          synchronized (objsToClose) {
+            HashMap<VirtuosoStatement,Object> list = (HashMap<VirtuosoStatement,Object>)objsToClose.clone();
+            for (Iterator<VirtuosoStatement> i = list.keySet().iterator(); i.hasNext(); )
+              try {
+                i.next().close();
+              } catch(Exception e) { }
+            objsToClose.clear();
+          }
+        }
+      }
+    }
+  protected void addStmtToClose(VirtuosoStatement obj)
+  {
+     if (requestStarted != 0) {
+       synchronized (objsToClose) {
+         objsToClose.put(obj, null);
+       }
+     }
+  }
+  protected void removeStmtFromClose(VirtuosoStatement obj)
+  {
+     if (!objsToClose.isEmpty()) {
+       synchronized (objsToClose) {
+         objsToClose.remove(obj);
+       }
+     }
+  }
   private void abortInternal() throws java.sql.SQLException
   {
     if (isClosed())
@@ -1306,6 +1395,25 @@ public class VirtuosoConnection implements Connection
    return remove;
  }
     };
+  }
+  private void clearCache()
+  {
+    if (useCachePrepStatements) {
+      synchronized (pStatementCache) {
+        VirtuosoPreparedStatement ps = null;
+        for (Iterator<VirtuosoPreparedStatement> i = pStatementCache.values().iterator(); i.hasNext(); ) {
+          ps = i.next();
+          if (ps != null) {
+            ps.isCached = false;
+            ps.setClosed(false);
+            try {
+              ps.close();
+            } catch(Exception e) { }
+          }
+        }
+        pStatementCache.clear();
+      }
+    }
   }
   protected void recacheStmt(VirtuosoPreparedStatement ps) throws SQLException
   {

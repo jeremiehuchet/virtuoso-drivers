@@ -54,5 +54,7 @@ in {
 
   jdk8 = pkgs_18_03.openjdk8;
 
+  jdk9 = pkgs_18_03.openjdk9;
+
   dhall-json = pkgs_20_03.dhall-json;
 }
