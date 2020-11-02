@@ -16,7 +16,7 @@
     <properties>
         <maven.compiler.source>1.7</maven.compiler.source>
         <maven.compiler.target>1.7</maven.compiler.target>
-        <openlink.virtuoso-opensource.gitrev>08b3d66d64ee1adb75f09d169d918cc1cb2470d5</openlink.virtuoso-opensource.gitrev>
+        <openlink.virtuoso-opensource.gitrev>bdc4a2c2bd5701611b3423e67e22d10a34458d43</openlink.virtuoso-opensource.gitrev>
     </properties>
     <build>
         <plugins>
