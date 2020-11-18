@@ -23,10 +23,11 @@ for version in 4.0 4.1 4.2 4.3 ; do
   wget -nv $current_baseurl/virtjdbc$v.jar
 done
 # compare checksums
-sha256sum --check latest.sha256 || {
+sha256sum --check latest.sha256 && {
   echo "✔ no update available"
-  exit 0
+  exit 1
+} || {
+  rm -v virtjdbc*.jar
+  echo "✋ an update is available"
+  exit 1
 }
-rm -v virtjdbc*.jar
-echo "✋ an update is available"
-exit 1
