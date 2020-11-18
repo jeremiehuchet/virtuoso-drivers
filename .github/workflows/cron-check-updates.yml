@@ -1,9 +1,8 @@
 name: check updates
 on:
-  label:
-    types: [deleted] # temporary manual trigger
+  workflow_dispatch:
   schedule:
-    - cron: "0 3 * * 1" # every monday at 3AM
+    - cron: "26 3 * * 1" # every monday at 3:26AM
 jobs:
   check_updates:
     name: check updates
@@ -15,16 +14,14 @@ jobs:
       - name: compare current versions checksums
         run: |
           ./.github/check-update.jdbc.sh || (
-            echo "JDBC_UPDATE_AVAILBALE=true" >> $GITHUB_ENV
+            echo "::set-output name=JDBC_UPDATE_AVAILBALE::true"
           )
-      - name: stop when no update available
-        uses: andymckay/cancel-action@0.2
-        if: env.JDBC_UPDATE_AVAILBALE != 'true'
 
   open_pr:
     name: open pull request
     needs:
       - check_updates
+    if: needs.check_updates.outputs.JDBC_UPDATE_AVAILBALE == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2.3.4
