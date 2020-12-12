@@ -11,7 +11,7 @@ for version in 4.0 4.1 4.2 4.3 ; do
 done
 # compute checksums
 sha256sum virtjdbc*.jar > latest.sha256
-rm -v virtjdbc*.jar
+rm virtjdbc*.jar
 
 echo "🕵 Compare with current jars checksums..."
 for version in 4.0 4.1 4.2 4.3 ; do
@@ -25,9 +25,10 @@ done
 # compare checksums
 sha256sum --check latest.sha256 && {
   echo "✔ no update available"
-  exit 1
+  exit 0
 } || {
-  rm -v virtjdbc*.jar
+  echo "::set-output name=JDBC_UPDATE_AVAILBALE::true"
   echo "✋ an update is available"
   exit 1
 }
+rm virtjdbc*.jar

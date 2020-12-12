@@ -12,20 +12,7 @@ jobs:
       - name: install xmlstarlet
         run: sudo apt-get install -qqy xmlstarlet
       - name: compare current versions checksums
-        run: |
-          ./.github/check-update.jdbc.sh || \
-            echo "::set-output name=JDBC_UPDATE_AVAILBALE::true"
-
-  test_output:
-    name: test output
-    needs:
-      - check_updates
-    runs-on: ubuntu-latest
-    env:
-      TEST: ${{ needs.check_updates.outputs.JDBC_UPDATE_AVAILBALE }}
-    steps:
-      - run: |
-          echo $TEST
+        run: ./.github/check-update.jdbc.sh
 
   open_pr:
     name: open pull request
