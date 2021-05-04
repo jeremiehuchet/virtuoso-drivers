@@ -27,8 +27,6 @@ sha256sum --check latest.sha256 && {
   echo "✔ no update available"
   exit 0
 } || {
-  echo "::set-output name=JDBC_UPDATE_AVAILBALE::true"
   echo "✋ an update is available"
   exit 1
 }
-rm virtjdbc*.jar
