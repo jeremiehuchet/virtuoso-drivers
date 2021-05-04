@@ -62,9 +62,9 @@ Client Protocol Driver exemptions
     </licenses>
     <distributionManagement>
         <repository>
-            <id>bintray-virtuoso-drivers</id>
+            <id>github-packages-virtuoso-drivers</id>
             <name>Virtuoso maven repository</name>
-            <url>https://dl.bintray.com/jeremiehuchet/virtuoso-drivers</url>
+	    <url>https://maven.pkg.github.com/jeremiehuchet/virtuoso-drivers</url>
         </repository>
     </distributionManagement>
     <modules>
