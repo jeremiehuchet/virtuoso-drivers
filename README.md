@@ -8,7 +8,7 @@ Maven repository distributing Openlink Virtuoso opensource Java libraries.
 
 ## Getting started
 
-You can browse available packages and versions through the [Bintray web UI](https://bintray.com/jeremiehuchet/virtuoso-drivers) section or the [raw repository view](https://dl.bintray.com/jeremiehuchet/virtuoso-drivers)
+You can browse available packages and versions through the [Github web UI](https://maven.pkg.github.com/jeremiehuchet/virtuoso-drivers) section or the [raw repository view](https://maven.pkg.github.com/jeremiehuchet/virtuoso-drivers)
 
 ### maven
 
@@ -18,7 +18,7 @@ Add the repository to your `pom.xml`:
 <repository>
     <id>virtuoso</id>
     <name>Openlink Virtuoso drivers packages</name>
-    <url>https://dl.bintray.com/jeremiehuchet/virtuoso-drivers</url>
+    <url>https://maven.pkg.github.com/jeremiehuchet/virtuoso-drivers</url>
 </repository>
 ```
 
@@ -39,7 +39,7 @@ Add the repository to your `build.gradle`:
 ```groovy
 repositories {
     maven {
-        url = uri("https://dl.bintray.com/jeremiehuchet/virtuoso-drivers")
+        url = uri("https://maven.pkg.github.com/jeremiehuchet/virtuoso-drivers")
     }
 }
 ```
