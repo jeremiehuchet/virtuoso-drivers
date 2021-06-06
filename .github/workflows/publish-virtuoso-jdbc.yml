@@ -16,8 +16,8 @@ jobs:
           GPG_PASSPHRASE_JDK6: ${{ secrets.GPG_PASSPHRASE_JDK6 }}
         run: ./.github/fetch-jdk6.sh
       - env:
-          GITHUB_USER: ${{ secrets.GITHUB_USER }}
+          GITHUB_USER: ${{ env.GITHUB_ACTOR }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          nix-shell --pure --keep BINTRAY_USERNAME --keep BINTRAY_TOKEN \
+          nix-shell --pure --keep GITHUB_USER --keep GITHUB_TOKEN \
               --run "mvn -B deploy -pl virtuoso-jdbc-4.0,virtuoso-jdbc-4.1,virtuoso-jdbc-4.2,virtuoso-jdbc-4.3"
