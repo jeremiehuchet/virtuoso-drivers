@@ -29,7 +29,7 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
        Object[] args = new Object[4];
        args[0] = (statid == null) ? statid = new String("ps" + connection.hashCode() + (req_no++)) : statid;
        args[1] = connection.escapeSQL(sql);
-       args[2] = new Long(0);
+       args[2] = Long.valueOf(0);
        args[3] = getStmtOpts();
        future = connection.getFuture(VirtuosoFuture.prepare,args, this.rpc_timeout);
        ps_vresultSet = vresultSet = new VirtuosoResultSet(this,metaData, true);
@@ -200,7 +200,7 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
       cancel();
       Object[] args = new Object[2];
       args[0] = statid;
-      args[1] = new Long(VirtuosoTypes.STAT_DROP);
+      args[1] = Long.valueOf(VirtuosoTypes.STAT_DROP);
       future = connection.getFuture(VirtuosoFuture.close,args, this.rpc_timeout);
       future.nextResult();
       connection.removeFuture(future);
@@ -377,13 +377,13 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
    {
       if(parameterIndex < 1 || parameterIndex > parameters.capacity())
          throw new VirtuosoException("Index " + parameterIndex + " is not 1<n<" + parameters.capacity(),VirtuosoException.BADPARAM);
-      objparams.setElementAt(new Boolean(x),parameterIndex - 1);
+      objparams.setElementAt(Boolean.valueOf(x),parameterIndex - 1);
    }
    public void setByte(int parameterIndex, byte x) throws VirtuosoException
    {
       if(parameterIndex < 1 || parameterIndex > parameters.capacity())
          throw new VirtuosoException("Index " + parameterIndex + " is not 1<n<" + parameters.capacity(),VirtuosoException.BADPARAM);
-      objparams.setElementAt(new Byte(x),parameterIndex - 1);
+      objparams.setElementAt(Byte.valueOf(x),parameterIndex - 1);
    }
    public void setBytes(int parameterIndex, byte x[]) throws VirtuosoException
    {
@@ -405,25 +405,25 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
    {
       if(parameterIndex < 1 || parameterIndex > parameters.capacity())
          throw new VirtuosoException("Index " + parameterIndex + " is not 1<n<" + parameters.capacity(),VirtuosoException.BADPARAM);
-      objparams.setElementAt(new Double(x),parameterIndex - 1);
+      objparams.setElementAt(Double.valueOf(x),parameterIndex - 1);
    }
    public void setFloat(int parameterIndex, float x) throws VirtuosoException
    {
       if(parameterIndex < 1 || parameterIndex > parameters.capacity())
          throw new VirtuosoException("Index " + parameterIndex + " is not 1<n<" + parameters.capacity(),VirtuosoException.BADPARAM);
-      objparams.setElementAt(new Float(x),parameterIndex - 1);
+      objparams.setElementAt(Float.valueOf(x),parameterIndex - 1);
    }
    public void setInt(int parameterIndex, int x) throws VirtuosoException
    {
       if(parameterIndex < 1 || parameterIndex > parameters.capacity())
          throw new VirtuosoException("Index " + parameterIndex + " is not 1<n<" + parameters.capacity(),VirtuosoException.BADPARAM);
-      objparams.setElementAt(new Integer(x),parameterIndex - 1);
+      objparams.setElementAt(Integer.valueOf(x),parameterIndex - 1);
    }
    public void setLong(int parameterIndex, long x) throws VirtuosoException
    {
       if(parameterIndex < 1 || parameterIndex > parameters.capacity())
          throw new VirtuosoException("Index " + parameterIndex + " is not 1<n<" + parameters.capacity(),VirtuosoException.BADPARAM);
-      objparams.setElementAt(new Long(x),parameterIndex - 1);
+      objparams.setElementAt(Long.valueOf(x),parameterIndex - 1);
    }
    public void setNull(int parameterIndex, int sqlType) throws VirtuosoException
    {
@@ -481,7 +481,7 @@ public class VirtuosoPreparedStatement extends VirtuosoStatement implements Prep
    {
       if(parameterIndex < 1 || parameterIndex > parameters.capacity())
          throw new VirtuosoException("Index " + parameterIndex + " is not 1<n<" + parameters.capacity(),VirtuosoException.BADPARAM);
-      objparams.setElementAt(new Short(x),parameterIndex - 1);
+      objparams.setElementAt(Short.valueOf(x),parameterIndex - 1);
    }
    public void setString(int parameterIndex, String x) throws VirtuosoException
    {

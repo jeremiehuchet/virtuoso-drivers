@@ -1179,7 +1179,7 @@ public class OPLCachedRowSet extends BaseRowSet
     Row r = this.getRowForUpdate(columnIndex, "'updateBoolean(...)'");
     switch(rowSMD.getColumnType(columnIndex)) {
      case Types.BOOLEAN:
-        r.setColData(columnIndex, new Boolean(x));
+        r.setColData(columnIndex, Boolean.valueOf(x));
         break;
       case Types.BIT:
       case Types.TINYINT:
@@ -1191,7 +1191,7 @@ public class OPLCachedRowSet extends BaseRowSet
       case Types.DOUBLE:
       case Types.DECIMAL:
       case Types.NUMERIC:
-        r.setColData(columnIndex, new Integer((x ?1:0)));
+        r.setColData(columnIndex, Integer.valueOf((x ?1:0)));
         break;
       case Types.CHAR:
       case Types.VARCHAR:
@@ -1206,22 +1206,22 @@ public class OPLCachedRowSet extends BaseRowSet
     }
   }
   public void updateByte(int columnIndex, byte x) throws SQLException {
-    updateNumber(columnIndex, new Byte(x), "'byte'", "'updateByte(...)'");
+    updateNumber(columnIndex, Byte.valueOf(x), "'byte'", "'updateByte(...)'");
   }
   public void updateShort(int columnIndex, short x) throws SQLException {
-    updateNumber(columnIndex, new Short(x), "'short'", "'updateShort(...)'");
+    updateNumber(columnIndex, Short.valueOf(x), "'short'", "'updateShort(...)'");
   }
   public void updateInt(int columnIndex, int x) throws SQLException {
-    updateNumber(columnIndex, new Integer(x), "'int'", "'updateInt(...)'");
+    updateNumber(columnIndex, Integer.valueOf(x), "'int'", "'updateInt(...)'");
   }
   public void updateLong(int columnIndex, long x) throws SQLException {
-    updateNumber(columnIndex, new Long(x), "'long'", "'updateLong(...)'");
+    updateNumber(columnIndex, Long.valueOf(x), "'long'", "'updateLong(...)'");
   }
   public void updateFloat(int columnIndex, float x) throws SQLException {
-    updateNumber(columnIndex, new Float(x), "'float'", "'updateFloat(...)'");
+    updateNumber(columnIndex, Float.valueOf(x), "'float'", "'updateFloat(...)'");
   }
   public void updateDouble(int columnIndex, double x) throws SQLException {
-    updateNumber(columnIndex, new Double(x), "'double'", "'updateDouble(...)'");
+    updateNumber(columnIndex, Double.valueOf(x), "'double'", "'updateDouble(...)'");
   }
   public void updateBigDecimal(int columnIndex, BigDecimal x) throws SQLException {
     if (x == null)
@@ -1236,7 +1236,7 @@ public class OPLCachedRowSet extends BaseRowSet
     else
       switch(rowSMD.getColumnType(columnIndex)) {
       case Types.BOOLEAN:
-        r.setColData(columnIndex, new Boolean(x));
+        r.setColData(columnIndex, Boolean.parseBoolean(x));
         break;
       case Types.BIT:
       case Types.TINYINT:
@@ -2083,7 +2083,7 @@ public class OPLCachedRowSet extends BaseRowSet
     Row r = this.getRowForUpdate(columnIndex, funcName);
     switch(rowSMD.getColumnType(columnIndex)) {
       case Types.BOOLEAN:
-        r.setColData(columnIndex, new Boolean((val.intValue()!=0? true:false)));
+        r.setColData(columnIndex, Boolean.valueOf((val.intValue()!=0? true:false)));
         break;
       case Types.BIT:
       case Types.TINYINT:
@@ -2433,14 +2433,14 @@ public class OPLCachedRowSet extends BaseRowSet
       pos = 0;
       query = sql.toCharArray();
       end = query.length - 1;
-      keywords.put("SELECT", new Integer(Token.T_SELECT));
-      keywords.put("FROM", new Integer(Token.T_FROM));
-      keywords.put("WHERE", new Integer(Token.T_WHERE));
-      keywords.put("ORDER", new Integer(Token.T_ORDER));
-      keywords.put("BY", new Integer(Token.T_BY));
-      keywords.put("GROUP", new Integer(Token.T_GROUP));
-      keywords.put("UNION", new Integer(Token.T_UNION));
-      keywords.put("HAVING", new Integer(Token.T_HAVING));
+      keywords.put("SELECT", Integer.valueOf(Token.T_SELECT));
+      keywords.put("FROM", Integer.valueOf(Token.T_FROM));
+      keywords.put("WHERE", Integer.valueOf(Token.T_WHERE));
+      keywords.put("ORDER", Integer.valueOf(Token.T_ORDER));
+      keywords.put("BY", Integer.valueOf(Token.T_BY));
+      keywords.put("GROUP", Integer.valueOf(Token.T_GROUP));
+      keywords.put("UNION", Integer.valueOf(Token.T_UNION));
+      keywords.put("HAVING", Integer.valueOf(Token.T_HAVING));
     }
     private String check_Select() {
       String tableName = null;
@@ -2873,7 +2873,7 @@ public class OPLCachedRowSet extends BaseRowSet
             tmpSQL.append(", ");
           tmpSQL.append(rsmd.getColumnName(i));
           tmpSQL.append(" = ? ");
-          setData.add(new Integer(i));
+          setData.add(Integer.valueOf(i));
         }
       tmpSQL.append(" WHERE ");
       tmpSQL.append(createWhere(keyCols, rs_orig));

@@ -301,7 +301,7 @@ public class VirtuosoXAResource implements XAResource
     private void rpc(VirtuosoConnection connection, int action, Object encodedXid)
         throws XAException {
         Object[] args = new Object[2];
-        args[0] = new Integer(action);
+        args[0] = Integer.valueOf(action);
         args[1] = encodedXid;
         try {
             synchronized (connection) {

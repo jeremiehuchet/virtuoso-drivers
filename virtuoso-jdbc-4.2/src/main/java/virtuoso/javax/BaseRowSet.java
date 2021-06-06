@@ -266,14 +266,14 @@ public abstract class BaseRowSet implements RowSet, Serializable {
         throws SQLException
   {
     Parameter param = getParam(parameterIndex);
-    param.value = new Boolean(x);
+    param.value = Boolean.valueOf(x);
     param.jType = Parameter.jObject;
   }
   public synchronized void setByte(int parameterIndex, byte x)
         throws SQLException
   {
     Parameter param = getParam(parameterIndex);
-    param.value = new Byte(x);
+    param.value = Byte.valueOf(x);
     param.jType = Parameter.jObject;
   }
   public synchronized void setBytes(int parameterIndex, byte[] x)
@@ -351,28 +351,28 @@ public abstract class BaseRowSet implements RowSet, Serializable {
         throws SQLException
   {
     Parameter param = getParam(parameterIndex);
-    param.value = new Double(x);
+    param.value = Double.valueOf(x);
     param.jType = Parameter.jObject;
   }
   public synchronized void setFloat(int parameterIndex, float x)
         throws SQLException
   {
     Parameter param = getParam(parameterIndex);
-    param.value = new Float(x);
+    param.value = Float.valueOf(x);
     param.jType = Parameter.jObject;
   }
   public synchronized void setInt(int parameterIndex, int x)
         throws SQLException
   {
     Parameter param = getParam(parameterIndex);
-    param.value = new Integer(x);
+    param.value = Integer.valueOf(x);
     param.jType = Parameter.jObject;
   }
   public synchronized void setLong(int parameterIndex, long x)
         throws SQLException
   {
     Parameter param = getParam(parameterIndex);
-    param.value = new Long(x);
+    param.value = Long.valueOf(x);
     param.jType = Parameter.jObject;
   }
   public synchronized void setRef(int parameterIndex, Ref x)
@@ -386,7 +386,7 @@ public abstract class BaseRowSet implements RowSet, Serializable {
         throws SQLException
   {
     Parameter param = getParam(parameterIndex);
-    param.value = new Short(x);
+    param.value = Short.valueOf(x);
     param.jType = Parameter.jObject;
   }
   public synchronized void setString(int parameterIndex, String x)
