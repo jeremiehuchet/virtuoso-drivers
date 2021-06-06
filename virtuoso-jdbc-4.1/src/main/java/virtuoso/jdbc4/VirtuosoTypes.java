@@ -142,7 +142,7 @@ class VirtuosoTypes
      if (x == null)
        return x;
      if (x instanceof java.lang.Boolean)
-       x = new Integer (((Boolean)x).booleanValue() ? 1 : 0);
+       x = Integer.valueOf (((Boolean)x).booleanValue() ? 1 : 0);
      switch (targetSqlType)
        {
    case Types.CHAR:
@@ -236,34 +236,34 @@ class VirtuosoTypes
        break;
           case Types.BIGINT:
               if (x instanceof java.math.BigDecimal || x instanceof java.lang.String)
-                return new Long(x.toString());
+                return Long.parseLong(x.toString());
               else if (x instanceof java.lang.Number)
-                return new Long(((Number)x).longValue());
+                return Long.valueOf(((Number)x).longValue());
        break;
           case Types.FLOAT:
           case Types.DOUBLE:
               if (x instanceof java.lang.Double)
                 return x;
               else if (x instanceof java.lang.Number)
-                return new Double (((Number)x).doubleValue());
+                return Double.valueOf (((Number)x).doubleValue());
               else if (x instanceof java.lang.String)
-                return new Double ((String) x);
+                return Double.parseDouble((String) x);
        break;
           case Types.INTEGER:
               if (x instanceof java.lang.Integer)
                 return x;
               else if (x instanceof java.lang.Number)
-                return new Integer (((Number)x).intValue());
+                return Integer.valueOf (((Number)x).intValue());
               else if (x instanceof java.lang.String)
-                return new Integer ((String) x);
+                return Integer.parseInt ((String) x);
        break;
           case Types.REAL:
               if (x instanceof java.lang.Float)
                 return x;
               else if (x instanceof java.lang.Number)
-                return new Float (((Number)x).floatValue());
+                return Float.valueOf(((Number)x).floatValue());
               else if (x instanceof java.lang.String)
-                return new Float ((String) x);
+                return Float.parseFloat((String) x);
        break;
           case Types.SMALLINT:
           case Types.TINYINT:
@@ -272,9 +272,9 @@ class VirtuosoTypes
               if (x instanceof java.lang.Short)
                 return x;
               else if (x instanceof java.lang.String)
-                return new Short ((String) x);
+                return Short.parseShort((String) x);
               else if (x instanceof java.lang.Number)
-                return new Short (((Number)x).shortValue());
+                return Short.valueOf (((Number)x).shortValue());
        break;
    case Types.ARRAY:
    case Types.DATALINK:
