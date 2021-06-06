@@ -55,52 +55,52 @@ public class VirtuosoStatement implements Statement
    }
    protected VectorOfLong getStmtOpts () throws VirtuosoException
      {
-       Long[] arrLong = new Long[11];
+       Long[] arrLong = new Long [11];
        if (connection.isReadOnly ()) {
-         arrLong[0] = new Long (VirtuosoTypes.SQL_CONCUR_ROWVER);
+         arrLong[0] = Long.valueOf (VirtuosoTypes.SQL_CONCUR_ROWVER);
        }
        else {
          if (concurrency == VirtuosoResultSet.CONCUR_VALUES)
-           arrLong[0] = new Long(VirtuosoTypes.SQL_CONCUR_VALUES);
+           arrLong[0] = Long.valueOf(VirtuosoTypes.SQL_CONCUR_VALUES);
        else
-  arrLong[0] = new Long(concurrency == VirtuosoResultSet.CONCUR_READ_ONLY ?
+  arrLong[0] = Long.valueOf(concurrency == VirtuosoResultSet.CONCUR_READ_ONLY ?
   VirtuosoTypes.SQL_CONCUR_READ_ONLY : VirtuosoTypes.SQL_CONCUR_LOCK);
        }
-       arrLong[1] = new Long(0);
-       arrLong[2] = new Long(maxRows);
+       arrLong[1] = Long.valueOf(0);
+       arrLong[2] = Long.valueOf(maxRows);
        if (connection.getGlobalTransaction()) {
            VirtuosoXAConnection xac = (VirtuosoXAConnection) connection.xa_connection;
     if (VirtuosoFuture.rpc_log != null)
     {
      VirtuosoFuture.rpc_log.println ("VirtuosoStatement.getStmtOpts () xa_res=" + xac.getVirtuosoXAResource().hashCode() + " :" + hashCode());
     }
-           arrLong[3] = new Long(xac.getVirtuosoXAResource().txn_timeout * 1000);
+           arrLong[3] = Long.valueOf(xac.getVirtuosoXAResource().txn_timeout * 1000);
        } else {
-           arrLong[3] = new Long(txn_timeout * 1000);
+           arrLong[3] = Long.valueOf(txn_timeout * 1000);
        }
      if (VirtuosoFuture.rpc_log != null)
        {
       VirtuosoFuture.rpc_log.println ("VirtuosoStatement.getStmtOpts (txn_timeout=" + arrLong[3] + ") (con=" + connection.hashCode() + ") :" + hashCode());
        }
-       arrLong[4] = new Long(prefetch);
-       arrLong[5] = new Long((connection.getAutoCommit()) ? 1 : 0);
-       arrLong[6] = new Long (rpc_timeout);
+       arrLong[4] = Long.valueOf(prefetch);
+       arrLong[5] = Long.valueOf((connection.getAutoCommit()) ? 1 : 0);
+       arrLong[6] = Long.valueOf (rpc_timeout);
        switch(type)
   {
     case VirtuosoResultSet.TYPE_FORWARD_ONLY:
-        arrLong[7] = new Long(VirtuosoTypes.SQL_CURSOR_FORWARD_ONLY);
+        arrLong[7] = Long.valueOf(VirtuosoTypes.SQL_CURSOR_FORWARD_ONLY);
         break;
     case VirtuosoResultSet.TYPE_SCROLL_SENSITIVE:
-        arrLong[7] = new Long(VirtuosoTypes.SQL_CURSOR_DYNAMIC);
+        arrLong[7] = Long.valueOf(VirtuosoTypes.SQL_CURSOR_DYNAMIC);
         break;
     case VirtuosoResultSet.TYPE_SCROLL_INSENSITIVE:
-        arrLong[7] = new Long(VirtuosoTypes.SQL_CURSOR_STATIC);
+        arrLong[7] = Long.valueOf(VirtuosoTypes.SQL_CURSOR_STATIC);
         break;
   }
        ;
-       arrLong[8] = new Long(0);
-       arrLong[9] = new Long(1);
-       arrLong[10] = new Long(connection.getTransactionIsolation());
+       arrLong[8] = Long.valueOf(0);
+       arrLong[9] = Long.valueOf(1);
+       arrLong[10] = Long.valueOf(connection.getTransactionIsolation());
        return new VectorOfLong(arrLong);
      }
    protected VirtuosoResultSet sendQuery(String sql) throws VirtuosoException
@@ -108,12 +108,10 @@ public class VirtuosoStatement implements Statement
        sparql_executed = sql.trim().regionMatches(true, 0, "sparql", 0, 6);
        try
        {
+    if (close_flag)
+               throw new VirtuosoException("Statement is already closed",VirtuosoException.CLOSED);
     synchronized (connection)
     {
-        if (close_flag)
-     throw new VirtuosoException("Statement is already closed",VirtuosoException.CLOSED);
-        Object[] args = new Object[6];
-        openlink.util.Vector vect = new openlink.util.Vector(1);
         if (future != null)
         {
      close();
@@ -121,6 +119,8 @@ public class VirtuosoStatement implements Statement
         }
         else
      cancel_rs();
+        Object[] args = new Object[6];
+        openlink.util.Vector vect = new openlink.util.Vector(1);
         args[0] = (statid == null) ? statid = new String("s" + connection.hashCode() + (req_no++)) : statid;
         args[2] = (cursorName == null) ? args[0] : cursorName;
         args[1] = connection.escapeSQL (sql);
@@ -178,30 +178,30 @@ public class VirtuosoStatement implements Statement
    {
      if(close_flag)
        return;
+     if(statid == null)
+       return;
+     if(vresultSet != null)
+       vresultSet = null;
+     if (!close_stmt && !result_opened)
+        return;
      synchronized (connection)
        {
   try
     {
       if(close_flag)
         return;
-      if (close_stmt)
-              close_flag = true;
-      if(statid == null)
-        return;
-      cancel_rs();
-             if (!close_stmt && !result_opened)
-               return;
       Object[] args = new Object[2];
       args[0] = statid;
-      args[1] = close_stmt ? new Long(VirtuosoTypes.STAT_DROP): new Long(VirtuosoTypes.STAT_CLOSE);
+      args[1] = close_stmt ? Long.valueOf(VirtuosoTypes.STAT_DROP): Long.valueOf(VirtuosoTypes.STAT_CLOSE);
       future = connection.getFuture(VirtuosoFuture.close,args, this.rpc_timeout);
       future.nextResult();
       connection.removeFuture(future);
+             if (close_stmt)
+               close_flag = true;
       future = null;
       result_opened = false;
-      if (!is_prepared) {
+      if (!is_prepared)
         metaData = null;
-      }
     }
   catch(IOException e)
     {
@@ -260,7 +260,7 @@ public class VirtuosoStatement implements Statement
      }
      Object[] args = new Object[2];
      args[0] = statid;
-     args[1] = new Long(future.hashCode());
+     args[1] = Long.valueOf(future.hashCode());
      future.send_message(VirtuosoFuture.fetch,args);
      vresultSet.getMoreResults(false);
      return true;

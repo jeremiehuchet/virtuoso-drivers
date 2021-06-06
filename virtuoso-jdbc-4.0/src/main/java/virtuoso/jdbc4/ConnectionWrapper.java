@@ -104,7 +104,7 @@ public class ConnectionWrapper implements java.sql.Connection {
     try {
       check_conn();
       if (r_AutoCommit == null)
-         r_AutoCommit = new Boolean(getAutoCommit());
+         r_AutoCommit = Boolean.valueOf(getAutoCommit());
       rconn.setAutoCommit(autoCommit);
     } catch (SQLException ex) {
       exceptionOccurred(ex);
@@ -154,7 +154,7 @@ public class ConnectionWrapper implements java.sql.Connection {
     try {
       check_conn();
       if (r_ReadOnly == null)
-         r_ReadOnly = new Boolean(isReadOnly());
+         r_ReadOnly = Boolean.valueOf(isReadOnly());
       rconn.setReadOnly(readOnly);
     } catch (SQLException ex) {
       exceptionOccurred(ex);
@@ -194,7 +194,7 @@ public class ConnectionWrapper implements java.sql.Connection {
     try {
       check_conn();
       if (r_TxnIsolation == null)
-         r_TxnIsolation = new Integer(getTransactionIsolation());
+         r_TxnIsolation = Integer.valueOf(getTransactionIsolation());
       rconn.setTransactionIsolation(level);
     } catch (SQLException ex) {
       exceptionOccurred(ex);
@@ -293,7 +293,7 @@ public class ConnectionWrapper implements java.sql.Connection {
     try {
       check_conn();
       if (r_Holdability == null)
-         r_Holdability = new Integer(getHoldability());
+         r_Holdability = Integer.valueOf(getHoldability());
       rconn.setHoldability(holdability);
     } catch (SQLException ex) {
       exceptionOccurred(ex);

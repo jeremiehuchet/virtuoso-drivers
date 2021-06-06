@@ -15,7 +15,7 @@ public class Driver implements java.sql.Driver
       }
    }
    protected static final int major = 3;
-   protected static final int minor = 117;
+   protected static final int minor = 119;
    private String host = "localhost";
    private String port = "1111";
    private String user, password, database, charset, pwdclear;
@@ -76,9 +76,9 @@ public class Driver implements java.sql.Driver
    {
     host = "localhost";
     port = "1111";
-    fbs = new Integer(VirtuosoTypes.DEFAULTPREFETCH);
-    sendbs = new Integer(32768);
-    recvbs = new Integer(32768);
+    fbs = Integer.valueOf(VirtuosoTypes.DEFAULTPREFETCH);
+    sendbs = Integer.valueOf(32768);
+    recvbs = Integer.valueOf(32768);
     Properties props = new Properties();
     for (Enumeration en = _info.propertyNames(); en.hasMoreElements(); ) {
       String key = (String)en.nextElement();

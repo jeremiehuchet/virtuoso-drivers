@@ -10,13 +10,13 @@
     <artifactId>virtuoso-jdbc</artifactId>
     <packaging>jar</packaging>
     <name>Virtuoso JDBC 4.0 driver</name>
-    <version>40.3.117.jre6</version>
+    <version>40.3.119.jre6</version>
     <description>JDBC 4.0 driver (JRE 6+) for Virtuoso database</description>
     <url>https://github.com/openlink/virtuoso-opensource/tree/${openlink.virtuoso-opensource.gitrev}</url>
     <properties>
         <maven.compiler.source>1.6</maven.compiler.source>
         <maven.compiler.target>1.6</maven.compiler.target>
-        <openlink.virtuoso-opensource.gitrev>08b3d66d64ee1adb75f09d169d918cc1cb2470d5</openlink.virtuoso-opensource.gitrev>
+        <openlink.virtuoso-opensource.gitrev>9981728a4b7b2749666f1380c20e4361ba881508</openlink.virtuoso-opensource.gitrev>
     </properties>
     <build>
         <plugins>

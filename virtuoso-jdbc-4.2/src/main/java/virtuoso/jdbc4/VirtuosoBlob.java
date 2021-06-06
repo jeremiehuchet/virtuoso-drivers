@@ -126,22 +126,22 @@ public class VirtuosoBlob
         rewind();
       }
     if (pos - 1 > bh_offset ())
-      init_read_len = new Long (pos - bh_offset() - 1);
+      init_read_len = Long.valueOf (pos - bh_offset() - 1);
     if (init_read_len != null)
       {
         openlink.util.Vector curr = null;
         synchronized (connection)
    {
      Object[] args = new Object[9];
-     args[0] = new Long(this.bh_current_page);
+     args[0] = Long.valueOf(this.bh_current_page);
      args[1] = init_read_len;
-     args[2] = new Long(this.bh_position);
-     args[3] = new Long(this.key_id);
-     args[4] = new Long(this.frag_no);
-     args[5] = new Long(this.dir_page);
+     args[2] = Long.valueOf(this.bh_position);
+     args[3] = Long.valueOf(this.key_id);
+     args[4] = Long.valueOf(this.frag_no);
+     args[5] = Long.valueOf(this.dir_page);
      args[6] = this.pages;
-     args[7] = this.dtp == VirtuosoTypes.DV_BLOB_WIDE_HANDLE ? new Long (1) : new Long(0);
-     args[8] = new Long (this.bh_timestamp);
+     args[7] = this.dtp == VirtuosoTypes.DV_BLOB_WIDE_HANDLE ? Long.valueOf (1) : Long.valueOf(0);
+     args[8] = Long.valueOf (this.bh_timestamp);
      VirtuosoFuture future = connection.getFuture(VirtuosoFuture.getdata,args, -1);
      curr = future.nextResult();
      curr = (openlink.util.Vector) curr.firstElement();
@@ -181,15 +181,15 @@ public class VirtuosoBlob
     synchronized (connection)
       {
         Object[] args = new Object[9];
-        args[0] = new Long(this.bh_current_page);
-        args[1] = new Long(length);
-        args[2] = new Long(this.bh_position);
-               args[3] = new Long(this.key_id);
-               args[4] = new Long(this.frag_no);
-               args[5] = new Long(this.dir_page);
+        args[0] = Long.valueOf(this.bh_current_page);
+        args[1] = Long.valueOf(length);
+        args[2] = Long.valueOf(this.bh_position);
+               args[3] = Long.valueOf(this.key_id);
+               args[4] = Long.valueOf(this.frag_no);
+               args[5] = Long.valueOf(this.dir_page);
                args[6] = this.pages;
-        args[7] = this.dtp == VirtuosoTypes.DV_BLOB_WIDE_HANDLE ? new Long (1) : new Long(0);
-        args[8] = new Long (this.bh_timestamp);
+        args[7] = this.dtp == VirtuosoTypes.DV_BLOB_WIDE_HANDLE ? Long.valueOf (1) : Long.valueOf(0);
+        args[8] = Long.valueOf (this.bh_timestamp);
         VirtuosoFuture future = connection.getFuture(VirtuosoFuture.getdata,args, -1);
         curr = future.nextResult();
         curr = (openlink.util.Vector) curr.firstElement();
