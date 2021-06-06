@@ -4,21 +4,24 @@ on:
   schedule:
     - cron: "26 3 * * 1" # every monday at 3:26AM
 jobs:
-  check_updates:
+  check-updates:
     name: check updates
     runs-on: ubuntu-latest
+    outputs:
+      update-available: ${{ steps.check-update.outputs.update-available }}
     steps:
       - uses: actions/checkout@v2.3.4
       - name: install xmlstarlet
         run: sudo apt-get install -qqy xmlstarlet
-      - name: compare current versions checksums
-        run: ./.github/check-update.jdbc.sh || echo "::set-output name=JDBC_UPDATE_AVAILABLE::true"
+      - id: check-update
+        name: compare current versions checksums
+        run: ./.github/check-update.jdbc.sh || echo "::set-output name=update-available::true"
 
-  open_pr:
+  open-pr:
     name: open pull request
     needs:
-      - check_updates
-    if: needs.check_updates.outputs.JDBC_UPDATE_AVAILABLE == 'true'
+      - check-updates
+    if: needs.check-updates.outputs.update-available == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2.3.4
