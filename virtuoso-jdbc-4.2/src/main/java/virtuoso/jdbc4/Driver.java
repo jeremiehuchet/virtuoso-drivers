@@ -15,7 +15,7 @@ public class Driver implements java.sql.Driver
       }
    }
    protected static final int major = 3;
-   protected static final int minor = 118;
+   protected static final int minor = 119;
    private String host = "localhost";
    private String port = "1111";
    private String user, password, database, charset, pwdclear;

@@ -108,12 +108,10 @@ public class VirtuosoStatement implements Statement
        sparql_executed = sql.trim().regionMatches(true, 0, "sparql", 0, 6);
        try
        {
+    if (close_flag)
+               throw new VirtuosoException("Statement is already closed",VirtuosoException.CLOSED);
     synchronized (connection)
     {
-        if (close_flag)
-     throw new VirtuosoException("Statement is already closed",VirtuosoException.CLOSED);
-        Object[] args = new Object[6];
-        openlink.util.Vector vect = new openlink.util.Vector(1);
         if (future != null)
         {
      close();
@@ -121,6 +119,8 @@ public class VirtuosoStatement implements Statement
         }
         else
      cancel_rs();
+        Object[] args = new Object[6];
+        openlink.util.Vector vect = new openlink.util.Vector(1);
         args[0] = (statid == null) ? statid = new String("s" + connection.hashCode() + (req_no++)) : statid;
         args[2] = (cursorName == null) ? args[0] : cursorName;
         args[1] = connection.escapeSQL (sql);
@@ -178,30 +178,30 @@ public class VirtuosoStatement implements Statement
    {
      if(close_flag)
        return;
+     if(statid == null)
+       return;
+     if(vresultSet != null)
+       vresultSet = null;
+     if (!close_stmt && !result_opened)
+        return;
      synchronized (connection)
        {
   try
     {
       if(close_flag)
         return;
-      if (close_stmt)
-              close_flag = true;
-      if(statid == null)
-        return;
-      cancel_rs();
-             if (!close_stmt && !result_opened)
-               return;
       Object[] args = new Object[2];
       args[0] = statid;
       args[1] = close_stmt ? Long.valueOf(VirtuosoTypes.STAT_DROP): Long.valueOf(VirtuosoTypes.STAT_CLOSE);
       future = connection.getFuture(VirtuosoFuture.close,args, this.rpc_timeout);
       future.nextResult();
       connection.removeFuture(future);
+             if (close_stmt)
+               close_flag = true;
       future = null;
       result_opened = false;
-      if (!is_prepared) {
+      if (!is_prepared)
         metaData = null;
-      }
     }
   catch(IOException e)
     {

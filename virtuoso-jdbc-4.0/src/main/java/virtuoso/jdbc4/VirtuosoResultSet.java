@@ -412,7 +412,18 @@ public class VirtuosoResultSet implements ResultSet
    }
    public void finalize() throws Throwable
    {
-      close();
+      if(pstmt != null)
+      {
+         pstmt.close();
+         pstmt = null;
+      }
+      if (statement != null)
+      {
+         statement.close_rs(false, is_prepared);
+         if (!is_prepared) {
+           statement = null;
+         }
+      }
    }
    void fixReturnedData(openlink.util.Vector data)
    {
