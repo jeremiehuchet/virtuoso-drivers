@@ -10,7 +10,7 @@ jobs:
     outputs:
       update-available: ${{ steps.check-update.outputs.update-available }}
     steps:
-      - uses: actions/checkout@v2.4.0
+      - uses: actions/checkout@v3
       - name: install xmlstarlet
         run: sudo apt-get install -qqy xmlstarlet
       - id: check-update
@@ -24,7 +24,7 @@ jobs:
     if: needs.check-updates.outputs.update-available == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2.4.0
+      - uses: actions/checkout@v3
 
       - name: install nix
         uses: cachix/install-nix-action@v16
